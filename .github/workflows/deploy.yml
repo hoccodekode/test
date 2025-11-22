@@ -13,7 +13,7 @@ jobs:
       uses: actions/checkout@v3
 
     # ------------------------------------
-    # 1. BUILD FRONTEND (Tạo thư mục 'build')
+    # 1. BUILD FRONTEND (Fix lỗi ESLint)
     # ------------------------------------
     - name: Setup Node.js environment
       uses: actions/setup-node@v3
@@ -28,11 +28,11 @@ jobs:
       run: npm run build
       working-directory: ./frontend
       env:
-        # Đảm bảo process.env.NODE_ENV là production (nếu cần)
         NODE_ENV: production
-        CI: false # <--- THÊM DÒNG NÀY ĐỂ BUỘC BUILD HOÀN THÀNH DÙ CÓ WARNING
+        CI: false # <--- ĐIỀU NÀY BUỘC BUILD THÀNH CÔNG DÙ CÓ CẢNH BÁO
+        
     # ------------------------------------
-    # 2. DEPLOY TO VPS (Khắc phục lỗi SSH)
+    # 2. DEPLOY TO VPS (Fix lỗi SSH)
     # ------------------------------------
     - name: Deploy to VPS (Frontend & Backend)
       uses: appleboy/scp-action@v0.1.4
@@ -40,14 +40,12 @@ jobs:
         host: ${{ secrets.VPS_HOST }}
         username: ${{ secrets.VPS_USER }}
         key: ${{ secrets.SSH_PRIVATE_KEY }}
-        # THAM SỐ KHẮC PHỤC LỖI SSH HANDSHAKE
-        key_algorithm: 'ssh-rsa' 
-        # Triển khai toàn bộ (Frontend đã build, Backend, .gitignore,...)
+        key_algorithm: 'ssh-rsa' # Khắc phục lỗi Handshake
         source: "./*"
         target: "/var/www/windshop"
     
     # ------------------------------------
-    # 3. RELOAD SERVICES (Quan trọng)
+    # 3. RELOAD SERVICES
     # ------------------------------------
     - name: Restart Backend and Reload Nginx
       uses: appleboy/ssh-action@master
@@ -55,18 +53,16 @@ jobs:
         host: ${{ secrets.VPS_HOST }}
         username: ${{ secrets.VPS_USER }}
         key: ${{ secrets.SSH_PRIVATE_KEY }}
-        # THAM SỐ KHẮC PHỤC LỖI SSH HANDSHAKE
         key_algorithm: 'ssh-rsa'
         script: |
           # Vào thư mục Backend để kích hoạt lại venv (nếu có thay đổi requirements)
           cd /var/www/windshop/backend
-          # Bắt buộc cài đặt lại libs nếu requirements.txt thay đổi
           /var/www/windshop/backend/venv/bin/pip install -r requirements.txt
           
           # Khởi động lại Gunicorn (Backend FastAPI)
           sudo systemctl restart windshop_backend
           
-          # Reload Nginx để áp dụng các file tĩnh Frontend mới
+          # Reload Nginx
           sudo systemctl reload nginx
           
           echo "Deployment và khởi động lại dịch vụ hoàn tất."
