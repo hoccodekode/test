@@ -150,7 +150,7 @@ const PostList = ({ posts, onPostUpdated, onPostDeleted }) => {
                             <div key={index} className="relative">
                               {image.image_path ? (
                                 <img 
-                                  src={`http://localhost:8000/uploads/${image.image_path.split('/').pop()}`}
+                                  src={`/uploads/${image.image_path.split('/').pop()}`}
                                   alt={`Post image ${index + 1}`}
                                   className="w-full h-20 object-cover rounded-lg"
                                 />
