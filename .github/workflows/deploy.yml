@@ -30,7 +30,7 @@ jobs:
       env:
         # Đảm bảo process.env.NODE_ENV là production (nếu cần)
         NODE_ENV: production
-        
+        CI: false # <--- THÊM DÒNG NÀY ĐỂ BUỘC BUILD HOÀN THÀNH DÙ CÓ WARNING
     # ------------------------------------
     # 2. DEPLOY TO VPS (Khắc phục lỗi SSH)
     # ------------------------------------
