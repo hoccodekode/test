@@ -582,69 +582,78 @@ async def upload_image(file: UploadFile = File(...)):
     except Exception as e:
         # Bắt lỗi lưu file
         raise HTTPException(status_code=500, detail=f"Error uploading file: {str(e)}")
-# --- THÊM ENDPOINT MỚI ---
+# ------------------------------
+# AI Content Generation (Đã sửa lỗi logic và tối ưu cho Gemini)
+# ------------------------------
 @app.post("/generate-content/")
 async def generate_content(request: GenerateContentRequest):
+    # 1. Kiểm tra client đã được khởi tạo thành công chưa (có Key hợp lệ không)
+    if client is None:
+        # Nếu client là None, nghĩa là có lỗi trong quá trình khởi tạo (ví dụ: key không hợp lệ ngay từ đầu)
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "Dịch vụ AI (Gemini) chưa được khởi tạo. Vui lòng kiểm tra GEMINI_API_KEY."}
+        )
+        
     try:
         prompt = request.prompt
+        
+        # System Instruction: Giúp Gemini tạo nội dung chất lượng cao, chuyên nghiệp
+        system_instruction = (
+            "Bạn là một Copywriter và Content Creator chuyên nghiệp, thân thiện, và sáng tạo. "
+            "Nhiệm vụ của bạn là nhận một mô tả cơ bản từ người dùng (ví dụ: 'Giới thiệu sản phẩm áo thun mới'), "
+            "và mở rộng nó thành một bài đăng trên Facebook hấp dẫn, chuyên nghiệp và có tính kêu gọi hành động cao. "
+            "Hãy đảm bảo nội dung có cấu trúc tốt (gồm tiêu đề, mô tả sản phẩm/dịch vụ, và lời kêu gọi hành động)."
+        )
 
         # --- Logic gọi Gemini API ---
-        # Sử dụng gemini-2.5-flash là lựa chọn tốt cho tốc độ và chi phí
         response = client.models.generate_content(
             model="gemini-2.5-flash",
-            # Gemini nhận trực tiếp prompt dưới dạng contents
-            contents=[prompt]
+            contents=[prompt],
+            config={"system_instruction": system_instruction}
         )
         
         generated_text = response.text
         
-        # Kiểm tra nếu nội dung bị chặn (Safety filter)
+        # 2. Kiểm tra nếu nội dung bị chặn (Safety filter)
         if not generated_text:
              raise HTTPException(
                 status_code=400,
                 detail={"error": "Nội dung bị chặn do vi phạm chính sách an toàn của Gemini. Vui lòng thử lại với prompt khác."}
             )
 
+        # 3. Làm sạch text: Loại bỏ các Markdown bao quanh (ví dụ: ** hoặc ```) để bài đăng gọn gàng
+        generated_text = re.sub(r'```[\s\S]*?```', '', generated_text).strip()
+        generated_text = generated_text.replace('**', '').strip()
+        generated_text = generated_text.replace('*', '').strip() # Loại bỏ các dấu * còn sót
+
         return {"content": generated_text}
 
     except APIError as e:
-        # Xử lý lỗi API cụ thể của Gemini (bao gồm lỗi quota/API key/400/500)
-        print(f"LỖI XỬ LÝ API GEMINI: {e}") 
+        # 4. Xử lý lỗi API cụ thể của Gemini (401, 429, 500)
+        error_message = str(e)
+        status_code = 500
+        
+        if "API_KEY_INVALID" in error_message or "Invalid API Key" in error_message:
+            status_code = 401
+            detail = "Lỗi xác thực: GEMINI_API_KEY không hợp lệ. Vui lòng kiểm tra lại Key."
+        elif "RESOURCE_EXHAUSTED" in error_message or "Quota exceeded" in error_message:
+            status_code = 429
+            detail = "Hạn mức sử dụng (Quota) đã hết. Vui lòng kiểm tra tài khoản Gemini của bạn."
+        else:
+            detail = f"Lỗi API Gemini không xác định: {error_message}"
+
+        print(f"LỖI XỬ LÝ API GEMINI: {error_message}") 
         raise HTTPException(
-            status_code=500, 
-            detail={"error": f"Lỗi API Gemini: Vui lòng kiểm tra GEMINI_API_KEY hoặc hạn mức sử dụng. Chi tiết: {str(e)}"}
+            status_code=status_code, 
+            detail={"error": detail}
         )
     except Exception as e:
-        # Xử lý các lỗi Python không liên quan đến API
+        # 5. Xử lý các lỗi Python không liên quan đến API
         print(f"LỖI XỬ LÝ CHUNG AI: {e}")
         raise HTTPException(status_code=500, detail="Lỗi máy chủ nội bộ trong quá trình tạo nội dung AI.")
-    try:
-        prompt = request.prompt
+# ------------------------------
 
-        # --- Logic gọi OpenAI gốc của bạn ---
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo", # Hoặc model bạn dùng
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": prompt}
-            ]
-        )
-        generated_text = response.choices[0].message.content
-
-        return {"content": generated_text}
-
-    except Exception as e:
-        # Xử lý các lỗi khác, bao gồm lỗi OpenAI 429/400
-        print(f"LỖI XỬ LÝ AI: {e}") # Lỗi này sẽ xuất hiện trên journalctl
-
-        # Nếu là lỗi Quota, trả về lỗi 429 cho Frontend xử lý
-        if "insufficient_quota" in str(e):
-            raise HTTPException(
-                status_code=429, 
-                detail={"error": "You exceeded your current quota, please check your plan and billing details."}
-            )
-        # Trả về lỗi 500 cho các lỗi không xác định khác
-        raise HTTPException(status_code=500, detail="Internal Server Error during AI generation.")
 # ------------------------------
 # Upload multiple images
 # ------------------------------
