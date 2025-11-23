@@ -259,8 +259,8 @@ const CreatePost = ({ onPostCreated, facebookTokens }) => {
                   ))}
                 </div>
               )}
-
-              {/* Image URL Input */}
+              
+              {/* KHỐI NÀY ĐÃ BỊ XÓA: Image URL Input 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Hoặc nhập link ảnh (sẽ thêm vào danh sách ảnh)
@@ -297,6 +297,7 @@ const CreatePost = ({ onPostCreated, facebookTokens }) => {
                   </button>
                 </div>
               </div>
+              */}
             </div>
           </div>
 
