@@ -569,38 +569,29 @@ async def upload_image(file: UploadFile = File(...)):
 # --- THÊM ENDPOINT MỚI ---
 @app.post("/generate-content/")
 async def generate_content(request: GenerateContentRequest):
-    """
-    Sử dụng OpenAI API để tạo nội dung bài viết hoàn chỉnh từ mô tả cơ bản.
-    """
-    if not client.api_key:
-        raise HTTPException(status_code=500, detail="OpenAI API Key not configured.")
-        
-    system_prompt = (
-        "Bạn là một trợ lý viết nội dung marketing chuyên nghiệp, thân thiện và hấp dẫn. "
-        "Hãy dựa trên mô tả sau để tạo ra một bài viết hoàn chỉnh, sử dụng ngôn ngữ tự nhiên, "
-        "và phù hợp với mạng xã hội (Facebook, Zalo...). "
-        "Chỉ trả về nội dung bài viết, không bao gồm lời dẫn hay kết luận."
-    )
-    
+    prompt = request.prompt
+    # response = client.chat.completions.create(...) # Logic cũ
+    # generated_text = response.choices[0].message.content # Logic cũ
+    # return {"content": generated_text} # Logic cũ
+
+    # PHẢI LÀM: Thay thế bằng đoạn code sau:
+
+    # Bắt đầu đoạn code thay thế
     try:
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo", # Hoặc gpt-4o nếu muốn chất lượng cao hơn
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": request.prompt}
-            ],
-            temperature=0.7,
-            max_tokens=2000
-        )
-        
-        # Trích xuất nội dung từ phản hồi của OpenAI
-        generated_text = response.choices[0].message.content.strip()
-        
-        return {"content": generated_text}
-        
+        # Ví dụ: kiểm tra xem prompt có tồn tại không
+        if not prompt:
+            raise HTTPException(status_code=400, detail="Prompt is required")
+
+        # **Vô hiệu hóa toàn bộ logic gọi OpenAI:**
+        # response = client.chat.completions.create(...) 
+        # generated_text = response.choices[0].message.content 
+
+        # **TẠM THỜI TRẢ VỀ DỮ LIỆU CỨNG**
+        return {"content": f"Test successful for prompt: {prompt}"}
+
     except Exception as e:
-        print(f"Lỗi gọi OpenAI API: {e}")
-        raise HTTPException(status_code=500, detail=f"Không thể tạo nội dung: {e}")
+        print(f"Lỗi trong generate_content: {e}") # Bỏ qua lỗi 429 nếu có
+        raise HTTPException(status_code=500, detail="Internal Server Error during AI process")
 # ------------------------------
 # Upload multiple images
 # ------------------------------
