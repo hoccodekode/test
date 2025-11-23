@@ -172,7 +172,46 @@ const CreatePost = ({ onPostCreated, facebookTokens }) => {
       setLoading(false);
     }
   };
+  const [aiLoading, setAiLoading] = useState(false);
 
+  const handleGenerateContent = async () => {
+    const prompt = formData.content.trim();
+    if (!prompt) {
+      toast.error('Vui lòng nhập mô tả cơ bản vào ô nội dung trước.');
+      return;
+    }
+
+    setAiLoading(true);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/generate-content/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ prompt: prompt }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        // Cập nhật nội dung bài viết với nội dung được tạo bởi AI
+        setFormData(prev => ({
+          ...prev,
+          content: result.content
+        }));
+        toast.success('Bài viết đã được AI hoàn thiện!');
+      } else {
+        const error = await response.json();
+        toast.error(error.detail || 'Lỗi khi gọi AI');
+      }
+    } catch (error) {
+      toast.error('Lỗi kết nối đến dịch vụ AI');
+      console.error('Error calling AI API:', error);
+    } finally {
+      setAiLoading(false);
+    }
+  };
+  
   return (
     <div className="max-w-2xl mx-auto">
       <div className="bg-white rounded-lg shadow">

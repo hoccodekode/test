@@ -74,6 +74,14 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 # Đây là 4 bảng chính: User, FacebookToken, Post, PostImage
 # Mỗi class tương ứng 1 bảng trong SQLite.
 
+# Load environment variables (Khóa API)
+load_dotenv()
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+# --- Thêm Pydantic Model cho Request ---
+class GenerateContentRequest(BaseModel):
+    prompt: str
+
 class User(Base):
     """
     Bảng users:
@@ -554,7 +562,41 @@ async def upload_image(file: UploadFile = File(...)):
     except Exception as e:
         # Bắt lỗi lưu file
         raise HTTPException(status_code=500, detail=f"Error uploading file: {str(e)}")
-
+# --- THÊM ENDPOINT MỚI ---
+@app.post("/generate-content/")
+async def generate_content(request: GenerateContentRequest):
+    """
+    Sử dụng OpenAI API để tạo nội dung bài viết hoàn chỉnh từ mô tả cơ bản.
+    """
+    if not client.api_key:
+        raise HTTPException(status_code=500, detail="OpenAI API Key not configured.")
+        
+    system_prompt = (
+        "Bạn là một trợ lý viết nội dung marketing chuyên nghiệp, thân thiện và hấp dẫn. "
+        "Hãy dựa trên mô tả sau để tạo ra một bài viết hoàn chỉnh, sử dụng ngôn ngữ tự nhiên, "
+        "và phù hợp với mạng xã hội (Facebook, Zalo...). "
+        "Chỉ trả về nội dung bài viết, không bao gồm lời dẫn hay kết luận."
+    )
+    
+    try:
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo", # Hoặc gpt-4o nếu muốn chất lượng cao hơn
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": request.prompt}
+            ],
+            temperature=0.7,
+            max_tokens=2000
+        )
+        
+        # Trích xuất nội dung từ phản hồi của OpenAI
+        generated_text = response.choices[0].message.content.strip()
+        
+        return {"content": generated_text}
+        
+    except Exception as e:
+        print(f"Lỗi gọi OpenAI API: {e}")
+        raise HTTPException(status_code=500, detail=f"Không thể tạo nội dung: {e}")
 # ------------------------------
 # Upload multiple images
 # ------------------------------
