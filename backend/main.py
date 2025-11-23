@@ -36,7 +36,7 @@ import json
 import os
 import uuid
 import shutil
-
+import re
 # Scheduler
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.date import DateTrigger
@@ -587,9 +587,8 @@ async def upload_image(file: UploadFile = File(...)):
 # ------------------------------
 @app.post("/generate-content/")
 async def generate_content(request: GenerateContentRequest):
-    # 1. Kiểm tra client đã được khởi tạo thành công chưa (có Key hợp lệ không)
+    # 1. Kiểm tra client đã được khởi tạo thành công chưa
     if client is None:
-        # Nếu client là None, nghĩa là có lỗi trong quá trình khởi tạo (ví dụ: key không hợp lệ ngay từ đầu)
         raise HTTPException(
             status_code=500,
             detail={"error": "Dịch vụ AI (Gemini) chưa được khởi tạo. Vui lòng kiểm tra GEMINI_API_KEY."}
@@ -641,7 +640,8 @@ async def generate_content(request: GenerateContentRequest):
             status_code = 429
             detail = "Hạn mức sử dụng (Quota) đã hết. Vui lòng kiểm tra tài khoản Gemini của bạn."
         else:
-            detail = f"Lỗi API Gemini không xác định: {error_message}"
+            # Lỗi API 500 hoặc các lỗi khác không thuộc 401/429
+            detail = f"Lỗi API Gemini không xác định (Có thể là lỗi máy chủ Gemini): {error_message}"
 
         print(f"LỖI XỬ LÝ API GEMINI: {error_message}") 
         raise HTTPException(
@@ -649,10 +649,26 @@ async def generate_content(request: GenerateContentRequest):
             detail={"error": detail}
         )
     except Exception as e:
-        # 5. Xử lý các lỗi Python không liên quan đến API
-        print(f"LỖI XỬ LÝ CHUNG AI: {e}")
-        raise HTTPException(status_code=500, detail="Lỗi máy chủ nội bộ trong quá trình tạo nội dung AI.")
+        # 5. XỬ LÝ LỖI CHUNG (Internal Server Error)
+        error_type = type(e).__name__
+        error_detail = str(e)
+        
+        # IN LOG CHỦ YẾU Ở ĐÂY ĐỂ CHẨN ĐOÁN
+        print("="*50)
+        print(f"LỖI PYTHON NGHIÊM TRỌNG TRONG ENDPOINT AI (500 Internal):")
+        # In traceback đầy đủ để chẩn đoán nguyên nhân
+        traceback.print_exc()
+        print(f"Loại lỗi: {error_type}")
+        print(f"Chi tiết lỗi: {error_detail}")
+        print("="*50)
+
+        # Trả về loại lỗi cụ thể cho frontend
+        raise HTTPException(
+            status_code=500, 
+            detail={"error": f"Lỗi máy chủ nội bộ: {error_type}. Vui lòng kiểm tra logs server để xem chi tiết."}
+        )
 # ------------------------------
+
 
 # ------------------------------
 # Upload multiple images
