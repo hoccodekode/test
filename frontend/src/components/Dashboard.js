@@ -119,10 +119,10 @@ const Dashboard = ({ posts, facebookTokens, onRefresh }) => {
                           {post.images.slice(0, 3).map((image, index) => (
                             <img 
                               key={index}
-                              src={image.image_path ? 
-                                `http://localhost:8000/uploads/${image.image_path.split('/').pop()}` : 
+                              ssrc={image.image_path ? 
+                                `https://windshop.site/api/uploads/${image.image_path.split('/').pop()}` : 
                                 image.image_url
-                              }
+                            }
                               alt={`Post image ${index + 1}`}
                               className="w-12 h-12 object-cover rounded"
                             />
@@ -176,8 +176,9 @@ const Dashboard = ({ posts, facebookTokens, onRefresh }) => {
                           {post.images.slice(0, 3).map((image, index) => (
                             <img 
                               key={index}
+                              // Thay đổi này sẽ buộc tải ảnh qua Base URL của API (ví dụ: https://windshop.site/api)
                               src={image.image_path ? 
-                                `http://localhost:8000/uploads/${image.image_path.split('/').pop()}` : 
+                                `https://windshop.site/api/uploads/${image.image_path.split('/').pop()}` : 
                                 image.image_url
                               }
                               alt={`Post image ${index + 1}`}
