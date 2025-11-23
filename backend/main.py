@@ -80,7 +80,20 @@ from pydantic import BaseModel
 
 # Load environment variables (Khóa API)
 load_dotenv()
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+# --- THÊM DÒNG NÀY ---
+openai_key = os.getenv("OPENAI_API_KEY")
+if not openai_key:
+    # Nếu Key không có, log lỗi (để debug) và khởi tạo Client với giá trị None
+    # hoặc Client sẽ tự động lấy từ ENV
+    print("CẢNH BÁO: OPENAI_API_KEY không được tìm thấy trong .env hoặc ENV.")
+    # Khởi tạo client, nó sẽ fail khi gọi API và báo lỗi chi tiết
+    client = OpenAI() 
+else:
+    # Key có, khởi tạo Client bình thường
+    client = OpenAI(api_key=openai_key)
+# ----------------------
+
 
 # --- Thêm Pydantic Model cho Request ---
 class GenerateContentRequest(BaseModel):
