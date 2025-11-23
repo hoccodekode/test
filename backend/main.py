@@ -73,6 +73,10 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 # ------------------------------
 # Đây là 4 bảng chính: User, FacebookToken, Post, PostImage
 # Mỗi class tương ứng 1 bảng trong SQLite.
+from dotenv import load_dotenv
+from openai import OpenAI
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 
 # Load environment variables (Khóa API)
 load_dotenv()
