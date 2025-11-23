@@ -74,25 +74,28 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 # Đây là 4 bảng chính: User, FacebookToken, Post, PostImage
 # Mỗi class tương ứng 1 bảng trong SQLite.
 from dotenv import load_dotenv
-from openai import OpenAI
+from google import genai
+from google.genai.errors import APIError # Thêm thư viện xử lý lỗi
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 # Load environment variables (Khóa API)
 load_dotenv()
 
-# --- THÊM DÒNG NÀY ---
-openai_key = os.getenv("OPENAI_API_KEY")
-if not openai_key:
-    # Nếu Key không có, log lỗi (để debug) và khởi tạo Client với giá trị None
-    # hoặc Client sẽ tự động lấy từ ENV
-    print("CẢNH BÁO: OPENAI_API_KEY không được tìm thấy trong .env hoặc ENV.")
-    # Khởi tạo client, nó sẽ fail khi gọi API và báo lỗi chi tiết
-    client = OpenAI() 
+# ------------------------------
+# KHỞI TẠO CLIENT GEMINI
+# ------------------------------
+gemini_key = os.getenv("GEMINI_API_KEY") # Đổi tên biến môi trường thành GEMINI_API_KEY
+if not gemini_key:
+    print("CẢNH BÁO: GEMINI_API_KEY không được tìm thấy trong .env hoặc ENV.")
+    # Khởi tạo Client không có key, nó sẽ tìm trong môi trường
+    client = genai.Client()
 else:
-    # Key có, khởi tạo Client bình thường
-    client = OpenAI(api_key=openai_key)
-# ----------------------
+    # Key có, khởi tạo Client
+    client = genai.Client(api_key=gemini_key)
+# ------------------------------
+
+ 
 
 
 # --- Thêm Pydantic Model cho Request ---
@@ -582,6 +585,39 @@ async def upload_image(file: UploadFile = File(...)):
 # --- THÊM ENDPOINT MỚI ---
 @app.post("/generate-content/")
 async def generate_content(request: GenerateContentRequest):
+    try:
+        prompt = request.prompt
+
+        # --- Logic gọi Gemini API ---
+        # Sử dụng gemini-2.5-flash là lựa chọn tốt cho tốc độ và chi phí
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            # Gemini nhận trực tiếp prompt dưới dạng contents
+            contents=[prompt]
+        )
+        
+        generated_text = response.text
+        
+        # Kiểm tra nếu nội dung bị chặn (Safety filter)
+        if not generated_text:
+             raise HTTPException(
+                status_code=400,
+                detail={"error": "Nội dung bị chặn do vi phạm chính sách an toàn của Gemini. Vui lòng thử lại với prompt khác."}
+            )
+
+        return {"content": generated_text}
+
+    except APIError as e:
+        # Xử lý lỗi API cụ thể của Gemini (bao gồm lỗi quota/API key/400/500)
+        print(f"LỖI XỬ LÝ API GEMINI: {e}") 
+        raise HTTPException(
+            status_code=500, 
+            detail={"error": f"Lỗi API Gemini: Vui lòng kiểm tra GEMINI_API_KEY hoặc hạn mức sử dụng. Chi tiết: {str(e)}"}
+        )
+    except Exception as e:
+        # Xử lý các lỗi Python không liên quan đến API
+        print(f"LỖI XỬ LÝ CHUNG AI: {e}")
+        raise HTTPException(status_code=500, detail="Lỗi máy chủ nội bộ trong quá trình tạo nội dung AI.")
     try:
         prompt = request.prompt
 
