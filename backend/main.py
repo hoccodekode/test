@@ -569,29 +569,33 @@ async def upload_image(file: UploadFile = File(...)):
 # --- THÊM ENDPOINT MỚI ---
 @app.post("/generate-content/")
 async def generate_content(request: GenerateContentRequest):
-    prompt = request.prompt
-    # response = client.chat.completions.create(...) # Logic cũ
-    # generated_text = response.choices[0].message.content # Logic cũ
-    # return {"content": generated_text} # Logic cũ
-
-    # PHẢI LÀM: Thay thế bằng đoạn code sau:
-
-    # Bắt đầu đoạn code thay thế
     try:
-        # Ví dụ: kiểm tra xem prompt có tồn tại không
-        if not prompt:
-            raise HTTPException(status_code=400, detail="Prompt is required")
+        prompt = request.prompt
 
-        # **Vô hiệu hóa toàn bộ logic gọi OpenAI:**
-        # response = client.chat.completions.create(...) 
-        # generated_text = response.choices[0].message.content 
+        # --- Logic gọi OpenAI gốc của bạn ---
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo", # Hoặc model bạn dùng
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": prompt}
+            ]
+        )
+        generated_text = response.choices[0].message.content
 
-        # **TẠM THỜI TRẢ VỀ DỮ LIỆU CỨNG**
-        return {"content": f"Test successful for prompt: {prompt}"}
+        return {"content": generated_text}
 
     except Exception as e:
-        print(f"Lỗi trong generate_content: {e}") # Bỏ qua lỗi 429 nếu có
-        raise HTTPException(status_code=500, detail="Internal Server Error during AI process")
+        # Xử lý các lỗi khác, bao gồm lỗi OpenAI 429/400
+        print(f"LỖI XỬ LÝ AI: {e}") # Lỗi này sẽ xuất hiện trên journalctl
+
+        # Nếu là lỗi Quota, trả về lỗi 429 cho Frontend xử lý
+        if "insufficient_quota" in str(e):
+            raise HTTPException(
+                status_code=429, 
+                detail={"error": "You exceeded your current quota, please check your plan and billing details."}
+            )
+        # Trả về lỗi 500 cho các lỗi không xác định khác
+        raise HTTPException(status_code=500, detail="Internal Server Error during AI generation.")
 # ------------------------------
 # Upload multiple images
 # ------------------------------
