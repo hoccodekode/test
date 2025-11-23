@@ -602,7 +602,8 @@ async def generate_content(request: GenerateContentRequest):
             "Bạn là một Copywriter và Content Creator chuyên nghiệp, thân thiện, và sáng tạo. "
             "Nhiệm vụ của bạn là nhận một mô tả cơ bản từ người dùng (ví dụ: 'Giới thiệu sản phẩm áo thun mới'), "
             "và mở rộng nó thành một bài đăng trên Facebook hấp dẫn, chuyên nghiệp và có tính kêu gọi hành động cao. "
-            "Hãy đảm bảo nội dung có cấu trúc tốt (gồm tiêu đề, mô tả sản phẩm/dịch vụ, và lời kêu gọi hành động)."
+            "Hãy đảm bảo nội dung có cấu trúc tốt (gồm tiêu đề, mô tả sản phẩm/dịch vụ, và lời kêu gọi hành động."
+            "Trả về nội dung để đăng lên Facebook luôn. - Không có dấu * và ** , và không quá 2000 chữ)"
         )
 
         # --- Logic gọi Gemini API ---
