@@ -211,7 +211,7 @@ const CreatePost = ({ onPostCreated, facebookTokens }) => {
       setAiLoading(false);
     }
   };
-  
+
   return (
     <div className="max-w-2xl mx-auto">
       <div className="bg-white rounded-lg shadow">
@@ -220,7 +220,7 @@ const CreatePost = ({ onPostCreated, facebookTokens }) => {
           <p className="text-gray-600 mt-1">Tạo và lên lịch bài viết cho Facebook</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">        
           {/* Content */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -231,9 +231,28 @@ const CreatePost = ({ onPostCreated, facebookTokens }) => {
               onChange={(e) => setFormData({ ...formData, content: e.target.value })}
               rows={6}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-              placeholder="Nhập nội dung bài viết..."
+              placeholder="Nhập mô tả cơ bản để AI hoàn thiện hoặc viết nội dung hoàn chỉnh..."
               required
             />
+            {/* THÊM NÚT AI Ở ĐÂY */}
+            <button
+              type="button"
+              onClick={handleGenerateContent}
+              disabled={aiLoading}
+              className="mt-2 flex items-center px-3 py-1.5 bg-indigo-500 text-white text-sm font-medium rounded-lg hover:bg-indigo-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {aiLoading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Đang tạo...
+                </>
+              ) : (
+                <>
+                  🤖 Tạo bằng AI
+                </>
+              )}
+            </button>
+            {/* Hết Nút AI */}
             <p className="text-sm text-gray-500 mt-1">
               {formData.content.length}/2000 ký tự
             </p>
