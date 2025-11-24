@@ -13,8 +13,11 @@ const useToast = () => {
 };
 // ----------------------------------------------------
 
-// --- Thay thế import: API_BASE_URL (Hardcode giá trị đã biết) ---
+// --- ĐỊA CHỈ API CẦN KIỂM TRA ---
+// Nếu bạn nhận lỗi "Not Found", hãy kiểm tra xem URL này có đúng không
+// và các đường dẫn con (/generate-content/, /generate-image-prompt/) có được định nghĩa trên server không.
 const API_BASE_URL = 'https://windshop.site/api'; 
+// ---------------------------------
 
 // --- Debounce Utility (Để tránh gọi API liên tục) ---
 const debounce = (func, delay) => {
@@ -80,7 +83,7 @@ const PostsList = ({ posts, onNavigateToCreate }) => {
 // ----------------------------------------------------
 
 
-// --- Component chính (Đã đổi tên thành CreatePost để giải quyết lỗi ESLint) ---
+// --- Component chính (Tên được đổi thành CreatePost để khớp với lỗi ESLint của bạn) ---
 const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) => {
   const { showToast } = useToast();
   const [formData, setFormData] = useState({
@@ -133,7 +136,10 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
         formData.append('files', file);
       });
 
-      const response = await fetch(`${API_BASE_URL}/upload-multiple-images/`, {
+      const fullUrl = `${API_BASE_URL}/upload-multiple-images/`;
+      console.log("DEBUG: Calling Image Upload API at:", fullUrl); // DEBUG LOG
+
+      const response = await fetch(fullUrl, {
         method: 'POST',
         body: formData,
       });
@@ -145,8 +151,8 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
         setFormData(prev => ({
           ...prev,
           images: [...prev.images, ...newImages.map(img => ({
-            image_path: img.file_path, // Giả định backend trả về file_path
-            url: img.url // Giả định backend trả về url để hiển thị preview
+            image_path: img.file_path, 
+            url: img.url 
           }))]
         }));
         showToast(`${newImages.length} ảnh đã được tải lên thành công!`);
@@ -184,7 +190,10 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
     setAiError(''); 
 
     try {
-      const response = await fetch(`${API_BASE_URL}/generate-content/`, {
+      const fullUrl = `${API_BASE_URL}/generate-content/`;
+      console.log("DEBUG: Calling AI Content API at:", fullUrl); // DEBUG LOG
+      
+      const response = await fetch(fullUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -223,7 +232,10 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
     setGeneratedImagePrompt(''); 
     
     try {
-        const response = await fetch(`${API_BASE_URL}/generate-image-prompt/`, {
+        const fullUrl = `${API_BASE_URL}/generate-image-prompt/`;
+        console.log("DEBUG: Calling AI Image Prompt API at:", fullUrl); // DEBUG LOG
+
+        const response = await fetch(fullUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ description: description }),
@@ -267,7 +279,10 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
     setLoading(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/posts/`, {
+      const fullUrl = `${API_BASE_URL}/posts/`;
+      console.log("DEBUG: Calling Post Scheduling API at:", fullUrl); // DEBUG LOG
+
+      const response = await fetch(fullUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -309,6 +324,7 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
     setLoading(true);
 
     try {
+      // Step 1: Create post (Scheduled time is now)
       const createResponse = await fetch(`${API_BASE_URL}/posts/`, {
         method: 'POST',
         headers: {
@@ -323,7 +339,11 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
       if (createResponse.ok) {
         const newPost = await createResponse.json();
         
-        const postNowResponse = await fetch(`${API_BASE_URL}/posts/${newPost.id}/post-now`, {
+        // Step 2: Post immediately
+        const fullUrl = `${API_BASE_URL}/posts/${newPost.id}/post-now`;
+        console.log("DEBUG: Calling Post Now API at:", fullUrl); // DEBUG LOG
+
+        const postNowResponse = await fetch(fullUrl, {
           method: 'POST',
         });
 
