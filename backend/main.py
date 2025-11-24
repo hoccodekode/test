@@ -24,6 +24,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.exc import SQLAlchemyError # Thêm thư viện xử lý lỗi SQLAlchemy
 
 # Pydantic schema
 from pydantic import BaseModel
@@ -36,10 +37,16 @@ import json
 import os
 import uuid
 import shutil
-
+import re
+import traceback # <--- THÊM DÒNG NÀY ĐỂ FIX LỖI 500 TRACEBACK.PRINT_EXC()
 # Scheduler
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.date import DateTrigger
+
+# AI / Environment
+from dotenv import load_dotenv
+from google import genai
+from google.genai.errors import APIError 
 
 # Server runner
 import uvicorn
@@ -71,14 +78,6 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 # ------------------------------
 # DATABASE MODELS (SQLAlchemy)
 # ------------------------------
-# Đây là 4 bảng chính: User, FacebookToken, Post, PostImage
-# Mỗi class tương ứng 1 bảng trong SQLite.
-from dotenv import load_dotenv
-from google import genai
-from google.genai.errors import APIError # Thêm thư viện xử lý lỗi
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-
 # Load environment variables (Khóa API)
 load_dotenv()
 
@@ -583,13 +582,12 @@ async def upload_image(file: UploadFile = File(...)):
         # Bắt lỗi lưu file
         raise HTTPException(status_code=500, detail=f"Error uploading file: {str(e)}")
 # ------------------------------
-# AI Content Generation (Đã sửa lỗi logic và tối ưu cho Gemini)
+# AI Content Generation
 # ------------------------------
 @app.post("/generate-content/")
 async def generate_content(request: GenerateContentRequest):
-    # 1. Kiểm tra client đã được khởi tạo thành công chưa (có Key hợp lệ không)
+    # 1. Kiểm tra client đã được khởi tạo thành công chưa
     if client is None:
-        # Nếu client là None, nghĩa là có lỗi trong quá trình khởi tạo (ví dụ: key không hợp lệ ngay từ đầu)
         raise HTTPException(
             status_code=500,
             detail={"error": "Dịch vụ AI (Gemini) chưa được khởi tạo. Vui lòng kiểm tra GEMINI_API_KEY."}
@@ -603,7 +601,8 @@ async def generate_content(request: GenerateContentRequest):
             "Bạn là một Copywriter và Content Creator chuyên nghiệp, thân thiện, và sáng tạo. "
             "Nhiệm vụ của bạn là nhận một mô tả cơ bản từ người dùng (ví dụ: 'Giới thiệu sản phẩm áo thun mới'), "
             "và mở rộng nó thành một bài đăng trên Facebook hấp dẫn, chuyên nghiệp và có tính kêu gọi hành động cao. "
-            "Hãy đảm bảo nội dung có cấu trúc tốt (gồm tiêu đề, mô tả sản phẩm/dịch vụ, và lời kêu gọi hành động)."
+            "Hãy đảm bảo nội dung có cấu trúc tốt (gồm tiêu đề, mô tả sản phẩm/dịch vụ, và lời kêu gọi hành động."
+            "Trả về nội dung để đăng lên Facebook luôn. - Không có dấu * và ** , và không quá 2000 chữ)"
         )
 
         # --- Logic gọi Gemini API ---
@@ -641,7 +640,8 @@ async def generate_content(request: GenerateContentRequest):
             status_code = 429
             detail = "Hạn mức sử dụng (Quota) đã hết. Vui lòng kiểm tra tài khoản Gemini của bạn."
         else:
-            detail = f"Lỗi API Gemini không xác định: {error_message}"
+            # Lỗi API 500 hoặc các lỗi khác không thuộc 401/429
+            detail = f"Lỗi API Gemini không xác định (Có thể là lỗi máy chủ Gemini): {error_message}"
 
         print(f"LỖI XỬ LÝ API GEMINI: {error_message}") 
         raise HTTPException(
@@ -649,10 +649,26 @@ async def generate_content(request: GenerateContentRequest):
             detail={"error": detail}
         )
     except Exception as e:
-        # 5. Xử lý các lỗi Python không liên quan đến API
-        print(f"LỖI XỬ LÝ CHUNG AI: {e}")
-        raise HTTPException(status_code=500, detail="Lỗi máy chủ nội bộ trong quá trình tạo nội dung AI.")
+        # 5. XỬ LÝ LỖI CHUNG (Internal Server Error)
+        error_type = type(e).__name__
+        error_detail = str(e)
+        
+        # IN LOG CHỦ YẾU Ở ĐÂY ĐỂ CHẨN ĐOÁN
+        print("="*50)
+        print(f"LỖI PYTHON NGHIÊM TRỌNG TRONG ENDPOINT AI (500 Internal):")
+        # In traceback đầy đủ để chẩn đoán nguyên nhân
+        traceback.print_exc()
+        print(f"Loại lỗi: {error_type}")
+        print(f"Chi tiết lỗi: {error_detail}")
+        print("="*50)
+
+        # Trả về loại lỗi cụ thể cho frontend
+        raise HTTPException(
+            status_code=500, 
+            detail={"error": f"Lỗi máy chủ nội bộ: {error_type}. Vui lòng kiểm tra logs server để xem chi tiết."}
+        )
 # ------------------------------
+
 
 # ------------------------------
 # Upload multiple images
@@ -864,25 +880,27 @@ async def get_facebook_tokens(db: Session = Depends(get_db)):
 @app.post("/posts/{post_id}/post-now")
 async def post_now(post_id: int, db: Session = Depends(get_db)):
     """
-    Đăng bài ngay lập tức:
-    - kiểm tra post tồn tại và chưa đăng
-    - lấy token page
-    - gọi FacebookAPI.post_to_facebook_with_images
-    - cập nhật trạng thái post
+    Endpoint đăng bài ngay lập tức (bỏ qua scheduler).
+    - Tải post, images, token.
+    - Gọi Facebook API để đăng bài.
+    - Cập nhật trạng thái post trong DB (posted=True).
     """
+    
+    # 1. Tải Post từ DB
     post = db.query(Post).filter(Post.id == post_id).first()
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
-    
+        
     if post.posted:
-        raise HTTPException(status_code=400, detail="Post already posted")
-    
-    # Lấy token FB của user
+        raise HTTPException(status_code=400, detail="Post already published to Facebook.")
+
+    # 2. Tải Facebook Token
+    # Demo: dùng token đầu tiên của user (user_id = 1)
     token = db.query(FacebookToken).filter(FacebookToken.user_id == post.user_id).first()
     if not token:
-        raise HTTPException(status_code=400, detail="No Facebook token found")
-    
-    # Lấy ảnh kèm post
+        raise HTTPException(status_code=400, detail="Facebook token not configured for this user.")
+
+    # 3. Tải Ảnh kèm Post
     images = db.query(PostImage).filter(PostImage.post_id == post_id).all()
     image_data = []
     for img in images:
@@ -890,7 +908,17 @@ async def post_now(post_id: int, db: Session = Depends(get_db)):
             'image_url': img.image_url,
             'image_path': img.image_path
         })
-    
+
+    # 4. Remove job khỏi Scheduler (nếu nó đang chờ đăng)
+    try:
+        # Nếu bài đang chờ schedule, ta cần hủy job đó
+        scheduler.remove_job(f"post_{post_id}")
+        print(f"Removed pending job: post_{post_id}")
+    except Exception:
+        # Bỏ qua nếu job không tồn tại
+        pass
+
+    # 5. Gọi Facebook API để đăng bài
     try:
         result = FacebookAPI.post_to_facebook_with_images(
             token.access_token,
@@ -899,27 +927,30 @@ async def post_now(post_id: int, db: Session = Depends(get_db)):
             image_data
         )
         
-        # Nếu thành công -> update DB
+        # 6. Cập nhật trạng thái sau khi đăng thành công
         post.posted = True
         post.facebook_post_id = result.get("post_id")
+        # Sử dụng timezone.utc cho tính nhất quán
         post.posted_at = datetime.now(timezone.utc)
+        
         db.commit()
         
         return {
-            "message": "Post published successfully", 
-            "facebook_post_id": result.get("post_id"),
-            "uploaded_media": result.get("uploaded_media", []),
-            "facebook_response": result.get("facebook_response", {})
+            "message": "Post published to Facebook immediately.",
+            "facebook_post_id": post.facebook_post_id,
+            "facebook_response": result
         }
+
+    except HTTPException as e:
+        # Bắt lỗi HTTP từ FacebookAPI (đã được custom)
+        db.rollback()
+        raise e
     
     except Exception as e:
-        # Log lỗi trên server và trả lỗi cho client
-        print(f"Error posting to Facebook: {e}")
-        raise HTTPException(status_code=400, detail=f"Error posting to Facebook: {str(e)}")
-
-# ------------------------------
-# MAIN: chạy server khi chạy python main.py
-# ------------------------------
-if __name__ == "__main__":
-    # uvicorn.run sẽ chạy ứng dụng trên host 0.0.0.0 port 8000
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+        # Xử lý các lỗi khác (ví dụ: Network, Data, etc.)
+        db.rollback()
+        print("="*50)
+        print(f"LỖI NGHIÊM TRỌNG KHI ĐĂNG BÀI NGAY LẬP TỨC:")
+        traceback.print_exc()
+        print("="*50)
+        raise HTTPException(status_code=500, detail=f"Internal error during Facebook posting: {str(e)}")
