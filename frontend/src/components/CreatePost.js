@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 // Đã loại bỏ useNavigate
 import { Calendar, Image, Save, Send, Upload, X, Bot, List } from 'lucide-react'; 
 
@@ -101,8 +101,12 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
   const [isGeneratingImagePrompt, setIsGeneratingImagePrompt] = useState(false);
   const [aiError, setAiError] = useState(''); 
 
-  const handleAiError = (errorDetail) => {
-    setAiError(errorDetail);
+  const handleAiError = (errorDetail, is404 = false) => {
+    let message = errorDetail;
+    if (is404) {
+        message = `Lỗi 404: Không tìm thấy đường dẫn API này trên máy chủ. Vui lòng kiểm tra lại cấu hình backend. Chi tiết lỗi: ${errorDetail}`;
+    }
+    setAiError(message);
     showToast('Có lỗi xảy ra với dịch vụ AI. Xem chi tiết bên dưới.', 'error');
   };
   
@@ -201,6 +205,11 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
         body: JSON.stringify({ prompt: prompt }),
       });
 
+      if (response.status === 404) {
+          handleAiError(response.statusText, true); // Bắt lỗi 404 rõ ràng
+          return;
+      }
+
       const result = await response.json();
 
       if (response.ok) {
@@ -210,7 +219,7 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
         }));
         showToast('Bài viết đã được AI hoàn thiện!');
       } else {
-        const errorDetail = result.detail.error || result.detail || 'Lỗi không xác định khi tạo nội dung.';
+        const errorDetail = result.detail.error || result.detail || result.message || 'Lỗi không xác định khi tạo nội dung.';
         handleAiError(errorDetail);
       }
     } catch (error) {
@@ -240,6 +249,11 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ description: description }),
         });
+        
+        if (response.status === 404) {
+            handleAiError(response.statusText, true); // Bắt lỗi 404 rõ ràng
+            return;
+        }
 
         const data = await response.json();
 
@@ -247,7 +261,7 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
             setGeneratedImagePrompt(data.image_prompt);
             showToast("Đã tạo Prompt hình ảnh. Vui lòng sao chép!");
         } else {
-            const errorDetail = data.detail.error || data.detail || 'Lỗi không xác định khi tạo Prompt ảnh.';
+            const errorDetail = data.detail.error || data.detail || data.message || 'Lỗi không xác định khi tạo Prompt ảnh.';
             handleAiError(errorDetail);
         }
     } catch (error) {
@@ -564,6 +578,7 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
               </div>
             ) : (
               <div className="space-y-2">
+                
                 {facebookTokens.map((token) => (
                   <div key={token.id} className="flex items-center text-green-600">
                     <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
@@ -611,11 +626,20 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
 
 // --- Component chính (Tên được đổi thành CreatePost để khớp với lỗi ESLint của bạn) ---
 const CreatePost = () => {
-    // Giá trị giả định cho facebookTokens 
+    /* * PHẦN NÀY LÀ MOCK DATA (DỮ LIỆU GIẢ ĐỊNH)
+    * Khi bạn tích hợp với Facebook Login, bạn sẽ cần thay thế phần này bằng cách
+    * lấy dữ liệu từ API backend (windshop.site) và lưu vào state.
+    */
     const mockFacebookTokens = useMemo(() => [
-        { id: '12345', page_name: 'Trang Demo 1' },
-        { id: '67890', page_name: 'Trang Demo 2' },
+        { id: '12345', page_name: 'Trang Của Bạn 1' },
+        { id: '67890', page_name: 'Trang Của Bạn 2' },
     ], []);
+    
+    // BẠN CÓ THỂ THAY THẾ 'mockFacebookTokens' BẰNG STATE DỮ LIỆU THẬT Ở ĐÂY:
+    // const [facebookTokens, setFacebookTokens] = useState([]);
+    
+    // Nếu bạn muốn dùng dữ liệu thật, hãy dùng:
+    // <CreatePostForm facebookTokens={facebookTokens} ... />
     
     const [currentPage, setCurrentPage] = useState('create');
     const [posts, setPosts] = useState([]);
@@ -630,6 +654,7 @@ const CreatePost = () => {
     return (
         <div className="min-h-screen bg-gray-100 p-4 md:p-8">
             {currentPage === 'create' ? (
+                // SỬ DỤNG mockFacebookTokens TẠM THỜI ĐỂ CÓ THỂ CHẠY CÁC CHỨC NĂNG KHÁC
                 <CreatePostForm 
                     onPostCreated={handlePostCreated}
                     facebookTokens={mockFacebookTokens}
