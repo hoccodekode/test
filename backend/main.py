@@ -37,6 +37,8 @@ import os
 import uuid
 import shutil
 import re
+import base64
+import traceback
 # Scheduler
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.date import DateTrigger
@@ -670,7 +672,177 @@ async def generate_content(request: GenerateContentRequest):
         )
 # ------------------------------
 
+#GenateImagePrompt: Tạo Prompt hình ảnh
 
+class GenerateImagePromptRequest(BaseModel):
+    description: str
+
+class GenerateImageRequest(BaseModel):
+    prompt: str
+    size: Optional[str] = "1024x1024"
+
+@app.post("/generate-image-prompt/")
+async def generate_image_prompt(request: GenerateImagePromptRequest):
+    if client is None:
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "Dịch vụ AI (Gemini) chưa được khởi tạo. Vui lòng kiểm tra GEMINI_API_KEY."}
+        )
+    
+    try:
+        user_description = request.description
+        
+        system_instruction = (
+            "Bạn là một chuyên gia tạo Prompt cho AI Image Generator. "
+            "Nhiệm vụ của bạn là chuyển đổi một mô tả đơn giản từ người dùng thành một Prompt chi tiết, sáng tạo và đầy đủ ngữ cảnh để tạo ra hình ảnh chất lượng cao. "
+            "Hãy tập trung vào phong cách, màu sắc, ánh sáng, chi tiết đối tượng, và tâm trạng. "
+            "QUY TẮC BẮT BUỘC: 1) Chỉ trả về Prompt mô tả hình ảnh, không thêm bất kỳ lời dẫn hay giải thích nào. 2) Prompt phải bằng tiếng Anh. 3) Độ dài Prompt không quá 150 từ."
+        )
+        
+        # Gửi request đến Gemini để tạo prompt hình ảnh
+        response = client.models.generate_content(
+            model="gemini-2.5-flash", # Hoặc gemini-pro nếu bạn muốn độ phức tạp cao hơn
+            contents=[user_description],
+            config={"system_instruction": system_instruction}
+        )
+        
+        image_prompt = response.text
+        
+        if not image_prompt:
+             raise HTTPException(
+                status_code=400,
+                detail={"error": "Gemini không tạo được Prompt hình ảnh. Vui lòng thử lại với mô tả khác."}
+            )
+            
+        # Làm sạch các ký tự Markdown nếu có
+        image_prompt = re.sub(r'```[\s\S]*?```', '', image_prompt).strip()
+        image_prompt = image_prompt.replace('**', '').strip()
+        image_prompt = image_prompt.replace('*', '').strip()
+
+        return {"image_prompt": image_prompt}
+
+    except APIError as e:
+        error_message = str(e)
+        status_code = 500
+        if "API_KEY_INVALID" in error_message or "Invalid API Key" in error_message:
+            status_code = 401
+            detail = "Lỗi xác thực: GEMINI_API_KEY không hợp lệ. Vui lòng kiểm tra lại Key."
+        elif "RESOURCE_EXHAUSTED" in error_message or "Quota exceeded" in error_message:
+            status_code = 429
+            detail = "Hạn mức sử dụng (Quota) đã hết. Vui lòng kiểm tra tài khoản Gemini của bạn."
+        else:
+            detail = f"Lỗi API Gemini không xác định (Có thể là lỗi máy chủ Gemini): {error_message}"
+
+        print(f"LỖI XỬ LÝ API GEMINI khi tạo Prompt ảnh: {error_message}") 
+        raise HTTPException(
+            status_code=status_code, 
+            detail={"error": detail}
+        )
+    except Exception as e:
+        error_type = type(e).__name__
+        print("="*50)
+        print(f"LỖI PYTHON NGHIÊM TRỌNG TRONG ENDPOINT AI tạo Prompt ảnh (500 Internal):")
+        traceback.print_exc()
+        print(f"Loại lỗi: {error_type}")
+        print(f"Chi tiết lỗi: {str(e)}")
+        print("="*50)
+        raise HTTPException(
+            status_code=500, 
+            detail={"error": f"Lỗi máy chủ nội bộ khi tạo Prompt ảnh: {error_type}. Vui lòng kiểm tra logs server."}
+        )
+# ------------------------------
+# Gemini image generation
+# ------------------------------
+@app.post("/generate-image/")
+async def generate_ai_image(request: GenerateImageRequest):
+    """
+    Tạo ảnh bằng Gemini (Imagen 3) và lưu ảnh vào thư mục uploads,
+    đồng thời trả về thông tin để frontend hiển thị như ảnh upload thông thường.
+    """
+    if client is None:
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "Dịch vụ AI (Gemini) chưa được khởi tạo. Vui lòng kiểm tra GEMINI_API_KEY."}
+        )
+
+    prompt = request.prompt.strip()
+    if not prompt:
+        raise HTTPException(status_code=400, detail={"error": "Prompt tạo ảnh không được để trống."})
+
+    try:
+        generate_fn = getattr(client.models, "generate_image", None) or getattr(client.models, "generate_images", None)
+        if generate_fn is None:
+            raise HTTPException(
+                status_code=500,
+                detail={"error": "Phiên bản google-genai hiện tại chưa hỗ trợ generate_image(). Vui lòng cập nhật thư viện."}
+            )
+
+        response = generate_fn(
+            model="imagen-3.0-generate",
+            prompt=prompt
+        )
+
+        generated_images = getattr(response, "generated_images", None)
+        if not generated_images:
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "Gemini không trả về dữ liệu ảnh. Vui lòng thử lại với prompt khác."}
+            )
+
+        first_image = generated_images[0]
+        image_base64 = getattr(first_image, "image_base64", None) or getattr(first_image, "bytes_base64", None)
+        if not image_base64:
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "Không nhận được dữ liệu ảnh từ Gemini."}
+            )
+
+        image_bytes = base64.b64decode(image_base64)
+        filename = f"gemini_ai_{uuid.uuid4().hex}.png"
+        file_path = os.path.join(UPLOAD_DIR, filename)
+
+        with open(file_path, "wb") as image_file:
+            image_file.write(image_bytes)
+
+        return {
+            "filename": filename,
+            "file_path": file_path,
+            "url": f"/uploads/{filename}",
+            "size": len(image_bytes),
+            "prompt_used": prompt
+        }
+
+    except HTTPException:
+        raise
+    except APIError as e:
+        error_message = str(e)
+        status_code = 500
+        if "API_KEY_INVALID" in error_message or "Invalid API Key" in error_message:
+            status_code = 401
+            detail = "Lỗi xác thực: GEMINI_API_KEY không hợp lệ. Vui lòng kiểm tra lại Key."
+        elif "RESOURCE_EXHAUSTED" in error_message or "Quota exceeded" in error_message:
+            status_code = 429
+            detail = "Hạn mức sử dụng (Quota) đã hết. Vui lòng kiểm tra tài khoản Gemini của bạn."
+        else:
+            detail = f"Lỗi API Gemini khi tạo ảnh: {error_message}"
+
+        print(f"LỖI TẠO ẢNH GEMINI: {error_message}")
+        raise HTTPException(
+            status_code=status_code,
+            detail={"error": detail}
+        )
+    except Exception as e:
+        error_type = type(e).__name__
+        print("="*50)
+        print("LỖI PYTHON TRONG ENDPOINT /generate-image/:")
+        traceback.print_exc()
+        print(f"Loại lỗi: {error_type}")
+        print(f"Chi tiết lỗi: {str(e)}")
+        print("="*50)
+        raise HTTPException(
+            status_code=500,
+            detail={"error": f"Lỗi máy chủ nội bộ khi tạo ảnh: {error_type}. Vui lòng kiểm tra logs."}
+        )
 # ------------------------------
 # Upload multiple images
 # ------------------------------

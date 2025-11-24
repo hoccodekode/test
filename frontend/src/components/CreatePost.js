@@ -1,39 +1,22 @@
-import React, { useState, useCallback, useMemo } from 'react';
-import { Calendar, Image, Save, Send, Upload, X, Bot, List, Sparkles } from 'lucide-react'; 
-
-// Dữ liệu giả định cho Facebook Tokens (ĐỂ TEST CHỨC NĂNG, CẦN THAY BẰNG DỮ LIỆU THẬT)
-const mockFacebookTokens = [
-    { id: 'page-123', page_name: 'Trang Facebook Chính' },
-    // { id: 'page-456', page_name: 'Trang Thử Nghiệm' },
-];
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
+// Đã loại bỏ useNavigate
+import { Calendar, Image, Save, Send, Upload, X, Bot, List, Wand2 } from 'lucide-react'; 
 
 // --- Helper: Toast/Message Box Placeholder (Do không có react-toastify) ---
 const useToast = () => {
   const showToast = (message, type = 'success') => {
     // Sử dụng console.log và UI đơn giản để thay thế toast
     console.log(`[${type.toUpperCase()}] ${message}`);
-    const toastContainer = document.getElementById('toast-container');
-    if (toastContainer) {
-        const toast = document.createElement('div');
-        toast.className = `p-3 rounded-lg shadow-xl text-white mb-2 transition-opacity duration-300 ${
-            type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-yellow-500'
-        }`;
-        toast.textContent = message;
-        toastContainer.appendChild(toast);
-        setTimeout(() => {
-            toast.style.opacity = '0';
-            setTimeout(() => toastContainer.removeChild(toast), 300);
-        }, 3000);
-    }
+    // Có thể thêm logic hiển thị tạm thời trên UI nếu cần
   };
   return { showToast };
 };
 // ----------------------------------------------------
 
 // --- ĐỊA CHỈ API CẦN KIỂM TRA ---
+// Nếu bạn nhận lỗi "Not Found", hãy kiểm tra xem URL này có đúng không
+// và các đường dẫn con (/generate-content/, /generate-image-prompt/) có được định nghĩa trên server không.
 const API_BASE_URL = 'https://windshop.site/api'; 
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=';
-const GEMINI_MODEL = 'imagen-4.0-generate-001';
 // ---------------------------------
 
 // --- Debounce Utility (Để tránh gọi API liên tục) ---
@@ -61,30 +44,11 @@ const formatDateForInput = (date) => {
     return `${year}-${month}-${day}T${hours}:${minutes}`;
 };
 
-// --- Helper for API calls with Exponential Backoff ---
-const fetchWithRetry = async (url, options = {}, maxRetries = 5) => {
-    for (let i = 0; i < maxRetries; i++) {
-        try {
-            const response = await fetch(url, options);
-            if (response.status !== 429) return response; // Success or non-rate-limit error
-        } catch (error) {
-            // Log error but continue to retry
-            console.error(`Fetch attempt ${i + 1} failed:`, error);
-        }
-        
-        // Exponential backoff
-        const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
-        await new Promise(resolve => setTimeout(resolve, delay));
-    }
-    throw new Error('Max retries exceeded');
-};
-
 
 // --- Placeholder Component: Danh sách bài viết ---
 const PostsList = ({ posts, onNavigateToCreate }) => {
     return (
         <div className="max-w-2xl mx-auto p-6">
-            <div id="toast-container" className="fixed bottom-4 right-4 z-50"></div>
             <h1 className="text-2xl font-bold text-gray-900 mb-4 flex justify-between items-center">
                 Danh sách bài viết đã lên lịch/đăng ({posts.length})
                 <button 
@@ -119,7 +83,7 @@ const PostsList = ({ posts, onNavigateToCreate }) => {
 // ----------------------------------------------------
 
 
-// --- Component chính ---
+// --- Component chính (Tên được đổi thành CreatePost để khớp với lỗi ESLint của bạn) ---
 const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) => {
   const { showToast } = useToast();
   const [formData, setFormData] = useState({
@@ -135,12 +99,10 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
   const [imageDescription, setImageDescription] = useState(''); 
   const [generatedImagePrompt, setGeneratedImagePrompt] = useState(''); 
   const [isGeneratingImagePrompt, setIsGeneratingImagePrompt] = useState(false);
-  
-  // NEW STATE FOR AI IMAGE GENERATION
-  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
-  const [generatedImageUrl, setGeneratedImageUrl] = useState('');
-  
+  const [isGeneratingAiImage, setIsGeneratingAiImage] = useState(false);
   const [aiError, setAiError] = useState(''); 
+
+  const hasImagePrompt = (generatedImagePrompt || imageDescription || '').trim().length > 0;
 
   const handleAiError = (errorDetail, is404 = false) => {
     let message = errorDetail;
@@ -159,23 +121,7 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
   };
 
 
-  const handleImageUpload = async (files, isAiGenerated = false, url = null, filePath = null) => {
-    // Nếu là ảnh AI, chỉ cần thêm vào state mà không cần upload lại
-    if (isAiGenerated && url && filePath) {
-        const newImage = { file_path: filePath, url: url };
-        setUploadedImages(prev => [...prev, newImage]);
-        setFormData(prev => ({
-          ...prev,
-          images: [...prev.images, {
-            image_path: filePath, 
-            url: url 
-          }]
-        }));
-        showToast('Ảnh AI đã được thêm vào bài viết!');
-        return;
-    }
-    
-    // Xử lý upload ảnh thông thường
+  const handleImageUpload = async (files) => {
     if (!files || files.length === 0) return;
 
     for (let file of files) {
@@ -240,7 +186,6 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
     }));
   };
 
-  // --- AI TEXT GENERATION ---
   const handleGenerateContent = async () => {
     const prompt = formData.content.trim();
     if (!prompt) {
@@ -255,7 +200,7 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
       const fullUrl = `${API_BASE_URL}/generate-content/`;
       console.log("DEBUG: Calling AI Content API at:", fullUrl); // DEBUG LOG
       
-      const response = await fetchWithRetry(fullUrl, {
+      const response = await fetch(fullUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -277,7 +222,7 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
         }));
         showToast('Bài viết đã được AI hoàn thiện!');
       } else {
-        const errorDetail = result.detail?.error || result.detail || result.message || 'Lỗi không xác định khi tạo nội dung.';
+        const errorDetail = result.detail.error || result.detail || result.message || 'Lỗi không xác định khi tạo nội dung.';
         handleAiError(errorDetail);
       }
     } catch (error) {
@@ -288,7 +233,6 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
     }
   };
 
-  // --- AI IMAGE PROMPT GENERATION (Unchanged Logic) ---
   const handleGenerateImagePromptBase = async (description) => {
     if (!description.trim()) {
       showToast('Vui lòng nhập mô tả ý tưởng hình ảnh.', 'error');
@@ -303,14 +247,14 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
         const fullUrl = `${API_BASE_URL}/generate-image-prompt/`;
         console.log("DEBUG: Calling AI Image Prompt API at:", fullUrl); // DEBUG LOG
 
-        const response = await fetchWithRetry(fullUrl, {
+        const response = await fetch(fullUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ description: description }),
         });
         
         if (response.status === 404) {
-            handleAiError(response.statusText, true); 
+            handleAiError(response.statusText, true); // Bắt lỗi 404 rõ ràng
             return;
         }
 
@@ -320,7 +264,7 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
             setGeneratedImagePrompt(data.image_prompt);
             showToast("Đã tạo Prompt hình ảnh. Vui lòng sao chép!");
         } else {
-            const errorDetail = data.detail?.error || data.detail || data.message || 'Lỗi không xác định khi tạo Prompt ảnh.';
+            const errorDetail = data.detail.error || data.detail || data.message || 'Lỗi không xác định khi tạo Prompt ảnh.';
             handleAiError(errorDetail);
         }
     } catch (error) {
@@ -336,60 +280,55 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
     []
   );
 
-  // --- NEW: AI IMAGE GENERATION ---
-  const handleGenerateImage = async () => {
-    const prompt = generatedImagePrompt.trim();
-    if (!prompt) {
-      showToast('Vui lòng tạo Prompt hình ảnh (English) trước.', 'error');
+  const handleGenerateAiImage = async () => {
+    const promptSource = (generatedImagePrompt || imageDescription || '').trim();
+    if (!promptSource) {
+      showToast('Vui lòng nhập mô tả hoặc tạo Prompt trước khi tạo ảnh AI.', 'error');
       return;
     }
 
-    setIsGeneratingImage(true);
-    setAiError(''); 
-    setGeneratedImageUrl(''); // Clear previous image
+    setIsGeneratingAiImage(true);
+    setAiError('');
 
     try {
-      const payload = { 
-        instances: { prompt: prompt }, 
-        parameters: { "sampleCount": 1 } 
-      };
-      
-      const fullUrl = GEMINI_API_URL; // Key sẽ được thêm tự động trong môi trường Canvas
-      console.log("DEBUG: Calling Gemini Image Generation API (Imagen) at:", fullUrl); // DEBUG LOG
+      const fullUrl = `${API_BASE_URL}/generate-image/`;
+      console.log("DEBUG: Calling Gemini Image API at:", fullUrl);
 
-      const response = await fetchWithRetry(fullUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
+      const response = await fetch(fullUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: promptSource })
       });
-      
-      if (!response.ok) {
-          const errorResult = await response.json();
-          const errorDetail = errorResult.error?.message || response.statusText;
-          handleAiError(`Lỗi tạo ảnh Gemini: ${errorDetail}`);
-          return;
-      }
-      
-      const result = await response.json();
-      
-      if (result.predictions && result.predictions.length > 0 && result.predictions[0].bytesBase64Encoded) {
-        const base64Data = result.predictions[0].bytesBase64Encoded;
-        const imageUrl = `data:image/png;base64,${base64Data}`;
-        setGeneratedImageUrl(imageUrl);
-        showToast('Đã tạo ảnh AI thành công!');
+
+      const data = await response.json();
+
+      if (response.ok) {
+        const aiImage = {
+          filename: data.filename,
+          file_path: data.file_path,
+          url: data.url,
+          size: data.size,
+          prompt_used: data.prompt_used
+        };
+
+        setUploadedImages(prev => [...prev, aiImage]);
+        setFormData(prev => ({
+          ...prev,
+          images: [...prev.images, { image_path: aiImage.file_path, url: aiImage.url }]
+        }));
+        showToast('Ảnh AI đã được tạo và thêm vào bài viết!');
       } else {
-        handleAiError('Phản hồi từ Gemini không chứa dữ liệu ảnh hợp lệ.');
+        const errorDetail = data.detail?.error || data.detail || data.error || data.message || 'Không thể tạo ảnh AI.';
+        handleAiError(errorDetail);
       }
-      
     } catch (error) {
-      handleAiError('Lỗi kết nối hoặc xử lý dữ liệu từ Gemini Image API.');
-      console.error('Error calling Gemini Image API:', error);
+      handleAiError('Không thể kết nối đến dịch vụ tạo ảnh Gemini.');
+      console.error('Error generating AI image:', error);
     } finally {
-      setIsGeneratingImage(false);
+      setIsGeneratingAiImage(false);
     }
   };
-  
-  // --- SUBMIT / POST NOW LOGIC (Unchanged) ---
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -409,7 +348,7 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
       const fullUrl = `${API_BASE_URL}/posts/`;
       console.log("DEBUG: Calling Post Scheduling API at:", fullUrl); // DEBUG LOG
 
-      const response = await fetchWithRetry(fullUrl, {
+      const response = await fetch(fullUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -452,7 +391,7 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
 
     try {
       // Step 1: Create post (Scheduled time is now)
-      const createResponse = await fetchWithRetry(`${API_BASE_URL}/posts/`, {
+      const createResponse = await fetch(`${API_BASE_URL}/posts/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -470,7 +409,7 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
         const fullUrl = `${API_BASE_URL}/posts/${newPost.id}/post-now`;
         console.log("DEBUG: Calling Post Now API at:", fullUrl); // DEBUG LOG
 
-        const postNowResponse = await fetchWithRetry(fullUrl, {
+        const postNowResponse = await fetch(fullUrl, {
           method: 'POST',
         });
 
@@ -493,69 +432,9 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
       setLoading(false);
     }
   };
-  
-  // Tạm thời tạo một function mock để upload ảnh AI lên server backend
-  const uploadAiImageToBackend = async (base64Image) => {
-      // Trong môi trường thực tế, bạn sẽ gửi base64Image này lên API backend
-      // để lưu trữ và trả về đường dẫn công khai.
-      // Vì không có API backend thực sự cho việc này, ta tạo một mock response.
-      
-      // Tạo tên file giả định
-      const fileName = `ai_generated_${Date.now()}.png`;
-      const filePath = `/uploads/${fileName}`;
-      
-      // Đây là nơi bạn sẽ gọi API backend của mình để thực hiện việc upload
-      /*
-      const response = await fetch(`${API_BASE_URL}/upload-ai-image/`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ base64_image: base64Image, file_name: fileName }),
-      });
-      if (response.ok) {
-          const result = await response.json();
-          return { url: result.url, file_path: result.file_path }; // Backend trả về URL và path
-      }
-      */
-      
-      // MOCK RETURN: Trả lại chính base64 URL và một path giả
-      // LƯU Ý: Facebook API (Graph API) KHÔNG chấp nhận base64 URL. 
-      // Bạn PHẢI upload lên server backend (như S3, Cloudinary hoặc server của bạn)
-      // và dùng URL public để đăng lên Facebook.
-      // Vì mục đích demo trong Canvas, ta sẽ giả định URL này là URL public.
-      return { url: base64Image, file_path: filePath };
-  };
-
-  const handleAddGeneratedImage = async () => {
-      if (!generatedImageUrl) {
-          showToast('Không có ảnh AI nào để thêm.', 'error');
-          return;
-      }
-      
-      // Bắt đầu quá trình lưu ảnh AI vào hệ thống của bạn (giả định là API backend)
-      setUploading(true);
-      try {
-          // Upload ảnh AI (base64) lên backend của bạn để có URL public
-          const { url, file_path } = await uploadAiImageToBackend(generatedImageUrl);
-          
-          // Thêm ảnh vào state bài viết
-          handleImageUpload(null, true, url, file_path);
-          setGeneratedImageUrl(''); // Xóa ảnh đã tạo sau khi thêm
-          showToast('Ảnh AI đã được thêm thành công vào bài viết.', 'success');
-          
-      } catch (error) {
-          showToast('Lỗi khi lưu và thêm ảnh AI. Vui lòng thử lại.', 'error');
-          console.error('Error adding AI image:', error);
-      } finally {
-          setUploading(false);
-      }
-  };
-
 
   return (
     <div className="max-w-2xl mx-auto">
-      {/* Toast Container for showing messages */}
-      <div id="toast-container" className="fixed bottom-4 right-4 z-50"></div>
-      
       <div className="bg-white rounded-lg shadow-xl">
         <div className="p-6 border-b border-gray-100 flex justify-between items-center">
           <h1 className="text-2xl font-bold text-gray-900">Tạo bài viết mới</h1>
@@ -607,14 +486,14 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
             </p>
           </div>
 
-          {/* --- KHỐI TẠO PROMPT VÀ ẢNH BẰNG AI --- */}
+          {/* --- KHỐI TẠO PROMPT HÌNH ẢNH BẰNG AI --- */}
           <div className="p-4 border border-teal-300 rounded-lg bg-teal-50 shadow-inner">
             <h2 className="flex items-center text-xl font-semibold text-teal-700 mb-3">
-              <Sparkles className="h-5 w-5 mr-2" />
-              Tạo hình ảnh AI
+              <Image className="h-5 w-5 mr-2" />
+              AI Hỗ Trợ Tạo Mô Tả Ảnh
             </h2>
             <p className="text-sm text-teal-600 mb-3">
-              **Bước 1:** Nhập ý tưởng cơ bản (tiếng Việt), AI sẽ mở rộng thành Prompt chi tiết (tiếng Anh).
+              Nhập ý tưởng cơ bản (tiếng Việt), AI sẽ mở rộng thành Prompt chi tiết (tiếng Anh) để bạn sử dụng với các công cụ tạo ảnh khác (Midjourney, DALL-E, v.v.).
             </p>
             <label htmlFor="imageDescription" className="block text-sm font-medium text-teal-700 mb-2">
                 Mô tả ý tưởng hình ảnh
@@ -630,67 +509,51 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
             <button
                 type="button"
                 onClick={() => debouncedGenerateImagePrompt(imageDescription)}
-                disabled={!imageDescription.trim() || isGeneratingImagePrompt || isGeneratingImage}
+                disabled={!imageDescription.trim() || isGeneratingImagePrompt}
                 className="mt-3 w-full flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 disabled:opacity-50 transition duration-150 shadow-md"
             >
                 {isGeneratingImagePrompt ? (
+                    // Spinner Tailwind CSS
                     <>
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                         Đang tạo Prompt ảnh...
                     </>
                 ) : (
-                    "Bước 1: Tạo Prompt (English)"
+                    "Tạo Prompt (English)"
                 )}
             </button>
             
             {generatedImagePrompt && (
                 <div className="mt-4 p-3 bg-teal-100 border border-teal-400 text-teal-800 rounded-lg text-sm">
-                    <strong>✅ Prompt đã tạo (Bước 2):</strong>
+                    <strong>✅ Prompt đã tạo (Sao chép):</strong>
+                    {/* Sử dụng select-all để người dùng dễ dàng copy toàn bộ prompt */}
                     <pre className="whitespace-pre-wrap font-mono text-xs bg-teal-50 p-2 rounded mt-1 select-all border border-teal-300">{generatedImagePrompt}</pre>
-                    
-                    {/* NÚT TẠO ẢNH BẰNG GEMINI */}
-                    <button
-                        type="button"
-                        onClick={handleGenerateImage}
-                        disabled={isGeneratingImage || isGeneratingImagePrompt || !generatedImagePrompt.trim()}
-                        className="mt-3 w-full flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 transition duration-150"
-                    >
-                        {isGeneratingImage ? (
-                            <>
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                Đang tạo ảnh AI...
-                            </>
-                        ) : (
-                            <>
-                                <Image className="h-4 w-4 mr-2" />
-                                Bước 3: Tạo Ảnh (Model {GEMINI_MODEL})
-                            </>
-                        )}
-                    </button>
                 </div>
             )}
-            
-            {/* HIỂN THỊ ẢNH AI ĐÃ TẠO */}
-            {generatedImageUrl && (
-                <div className="mt-4 p-3 bg-indigo-100 border border-indigo-400 rounded-lg">
-                    <h4 className="font-semibold text-indigo-800 mb-2">Ảnh AI đã tạo (Bước 4):</h4>
-                    <img 
-                        src={generatedImageUrl} 
-                        alt="AI Generated" 
-                        className="w-full h-auto max-h-96 object-contain rounded-lg shadow-md border border-indigo-300"
-                    />
-                    <button
-                        type="button"
-                        onClick={handleAddGeneratedImage}
-                        disabled={uploading}
-                        className="mt-3 w-full flex justify-center items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors font-semibold"
-                    >
-                        {uploading ? 'Đang thêm...' : 'Thêm Ảnh AI này vào Bài viết'}
-                    </button>
-                </div>
-            )}
+
+            <button
+                type="button"
+                onClick={handleGenerateAiImage}
+                disabled={!hasImagePrompt || isGeneratingAiImage}
+                className="mt-4 w-full flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 transition duration-150 shadow-md"
+            >
+                {isGeneratingAiImage ? (
+                    <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Đang tạo ảnh Gemini...
+                    </>
+                ) : (
+                    <>
+                        <Wand2 className="h-4 w-4 mr-2" />
+                        Tạo ảnh bằng Gemini & thêm vào bài viết
+                    </>
+                )}
+            </button>
+            <p className="text-xs text-teal-700 mt-2 text-center">
+                Gemini sẽ ưu tiên Prompt tiếng Anh đã tạo. Nếu chưa có Prompt, mô tả tiếng Việt sẽ được dùng trực tiếp.
+            </p>
           </div>
-          {/* HẾT KHỐI TẠO PROMPT VÀ ẢNH */}
+          {/* HẾT KHỐI TẠO PROMPT HÌNH ẢNH */}
           
           {/* AI Error Display */}
           {aiError && (
@@ -745,8 +608,7 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
                   {uploadedImages.map((image, index) => (
                     <div key={index} className="relative group">
                       <img
-                        // Vì ta giả định image.url có thể là URL public hoặc Base64 từ ảnh AI
-                        src={image.url.startsWith('data:image') ? image.url : `${API_BASE_URL}${image.url}`} 
+                        src={`${API_BASE_URL}${image.url}`} 
                         alt={`Uploaded ${index + 1}`}
                         className="w-full h-32 object-cover rounded-lg border border-gray-200 shadow-md"
                       />
@@ -812,7 +674,7 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
           <div className="flex space-x-4 pt-2">
             <button
               type="submit"
-              disabled={loading || facebookTokens.length === 0 || uploading}
+              disabled={loading || facebookTokens.length === 0}
               className="flex-1 flex items-center justify-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-semibold shadow-lg shadow-indigo-200"
             >
               <Save className="h-4 w-4 mr-2" />
@@ -822,7 +684,7 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
             <button
               type="button"
               onClick={handlePostNow}
-              disabled={loading || facebookTokens.length === 0 || uploading}
+              disabled={loading || facebookTokens.length === 0}
               className="flex-1 flex items-center justify-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-semibold shadow-lg shadow-green-200"
             >
               <Send className="h-4 w-4 mr-2" />
@@ -836,13 +698,19 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
 };
 
 
-// --- Main App Component ---
+// --- Component chính (Tên được đổi thành CreatePost để khớp với lỗi ESLint của bạn) ---
 const CreatePost = () => {
-    /* MOCK DATA: Dữ liệu giả định cho Facebook Tokens */
-    // Đặt ở đây để sử dụng trong demo
-    const mockFacebookTokens = [
-        { id: 'page-123', page_name: 'Trang Facebook Chính' },
-    ];
+    /* * PHẦN NÀY LÀ MOCK DATA (DỮ LIỆU GIẢ ĐỊNH)
+    * Khi bạn tích hợp với Facebook Login, bạn sẽ cần thay thế phần này bằng cách
+    * lấy dữ liệu từ API backend (windshop.site) và lưu vào state.
+    */
+    const [facebookTokens, setFacebookTokens] = useState([]);
+    
+    // BẠN CÓ THỂ THAY THẾ 'mockFacebookTokens' BẰNG STATE DỮ LIỆU THẬT Ở ĐÂY:
+    // const [facebookTokens, setFacebookTokens] = useState([]);
+    
+    // Nếu bạn muốn dùng dữ liệu thật, hãy dùng:
+    // <CreatePostForm facebookTokens={facebookTokens} ... />
     
     const [currentPage, setCurrentPage] = useState('create');
     const [posts, setPosts] = useState([]);
@@ -857,10 +725,10 @@ const CreatePost = () => {
     return (
         <div className="min-h-screen bg-gray-100 p-4 md:p-8">
             {currentPage === 'create' ? (
+                // SỬ DỤNG mockFacebookTokens TẠM THỜI ĐỂ CÓ THỂ CHẠY CÁC CHỨC NĂNG KHÁC
                 <CreatePostForm 
                     onPostCreated={handlePostCreated}
-                    // Truyền mock data vào component chính
-                    facebookTokens={mockFacebookTokens} 
+                    facebookTokens={mockFacebookTokens}
                     onNavigateToPosts={navigateToPosts}
                 />
             ) : (
@@ -873,4 +741,4 @@ const CreatePost = () => {
     );
 };
 
-export default CreatePost;
+export default CreatePost; 
