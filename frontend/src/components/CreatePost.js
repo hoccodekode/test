@@ -1,16 +1,13 @@
 import React, { useState, useCallback, useMemo } from 'react';
 // Đã loại bỏ useNavigate
 import { Calendar, Image, Save, Send, Upload, X, Bot, List } from 'lucide-react'; 
-// Không có toastify trong môi trường này, thay thế bằng alert/console cho đơn giản
-// HOẶC TẠO component Toast tùy chỉnh nếu cần. Tạm thời dùng console.log/hộp thông báo đơn giản.
 
 // --- Helper: Toast/Message Box Placeholder (Do không có react-toastify) ---
 const useToast = () => {
   const showToast = (message, type = 'success') => {
-    // Sử dụng console.log hoặc UI đơn giản để thay thế toast
+    // Sử dụng console.log và UI đơn giản để thay thế toast
     console.log(`[${type.toUpperCase()}] ${message}`);
-    // Nếu muốn hiển thị modal, cần xây dựng thêm UI
-    // Tạm thời, dùng alert cho các lỗi nghiêm trọng (chỉ để debug, nhưng quy tắc cấm alert. Dùng state error message)
+    // Có thể thêm logic hiển thị tạm thời trên UI nếu cần
   };
   return { showToast };
 };
@@ -83,12 +80,11 @@ const PostsList = ({ posts, onNavigateToCreate }) => {
 // ----------------------------------------------------
 
 
-// --- Refactored CreatePost Component (Bây giờ là CreatePostForm) ---
+// --- Component chính (Đã đổi tên thành CreatePost để giải quyết lỗi ESLint) ---
 const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) => {
   const { showToast } = useToast();
   const [formData, setFormData] = useState({
     content: '',
-    // Đảm bảo scheduled_time là Date object để dùng formatDateForInput
     scheduled_time: new Date(), 
     images: []
   });
@@ -96,22 +92,17 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
   const [uploadedImages, setUploadedImages] = useState([]);
   const [uploading, setUploading] = useState(false);
   
-  // --- AI Content Generation States (Text) ---
   const [aiLoading, setAiLoading] = useState(false);
-
-  // --- AI Image Prompt Generation States ---
   const [imageDescription, setImageDescription] = useState(''); 
   const [generatedImagePrompt, setGeneratedImagePrompt] = useState(''); 
   const [isGeneratingImagePrompt, setIsGeneratingImagePrompt] = useState(false);
   const [aiError, setAiError] = useState(''); 
 
-  // Xử lý lỗi AI tập trung
   const handleAiError = (errorDetail) => {
     setAiError(errorDetail);
     showToast('Có lỗi xảy ra với dịch vụ AI. Xem chi tiết bên dưới.', 'error');
   };
   
-  // --- Xử lý thay đổi ngày/giờ từ input type="datetime-local" ---
   const handleDateChange = (e) => {
     const date = new Date(e.target.value);
     if (!isNaN(date)) {
@@ -120,7 +111,6 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
   };
 
 
-  // --- Hàm xử lý tải lên ảnh ---
   const handleImageUpload = async (files) => {
     if (!files || files.length === 0) return;
 
@@ -155,7 +145,8 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
         setFormData(prev => ({
           ...prev,
           images: [...prev.images, ...newImages.map(img => ({
-            image_path: img.file_path
+            image_path: img.file_path, // Giả định backend trả về file_path
+            url: img.url // Giả định backend trả về url để hiển thị preview
           }))]
         }));
         showToast(`${newImages.length} ảnh đã được tải lên thành công!`);
@@ -182,7 +173,6 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
     }));
   };
 
-  // --- Hàm xử lý tạo Content (Text) ---
   const handleGenerateContent = async () => {
     const prompt = formData.content.trim();
     if (!prompt) {
@@ -191,7 +181,7 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
     }
 
     setAiLoading(true);
-    setAiError(''); // Clear previous error
+    setAiError(''); 
 
     try {
       const response = await fetch(`${API_BASE_URL}/generate-content/`, {
@@ -222,7 +212,6 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
     }
   };
 
-  // --- Hàm xử lý tạo Prompt Hình ảnh ---
   const handleGenerateImagePromptBase = async (description) => {
     if (!description.trim()) {
       showToast('Vui lòng nhập mô tả ý tưởng hình ảnh.', 'error');
@@ -230,7 +219,7 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
     }
     
     setIsGeneratingImagePrompt(true);
-    setAiError(''); // Clear previous error
+    setAiError(''); 
     setGeneratedImagePrompt(''); 
     
     try {
@@ -257,13 +246,11 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
     }
   };
 
-  // Sử dụng useMemo để đảm bảo hàm debounce chỉ được tạo một lần
   const debouncedGenerateImagePrompt = useMemo(
     () => debounce(handleGenerateImagePromptBase, 1500),
     []
   );
 
-  // --- Hàm xử lý Submit (Lên lịch) ---
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -285,7 +272,6 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
         headers: {
           'Content-Type': 'application/json',
         },
-        // Đảm bảo gửi Date object dưới dạng string ISO
         body: JSON.stringify({
             ...formData,
             scheduled_time: formData.scheduled_time.toISOString()
@@ -296,7 +282,7 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
         const newPost = await response.json();
         onPostCreated(newPost);
         showToast('Bài viết đã được lên lịch thành công!');
-        onNavigateToPosts(); // Sử dụng prop thay vì useNavigate
+        onNavigateToPosts();
       } else {
         const error = await response.json();
         showToast(error.detail || 'Có lỗi xảy ra khi lên lịch bài viết', 'error');
@@ -309,7 +295,6 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
     }
   };
 
-  // --- Hàm xử lý Post Now (Đăng ngay) ---
   const handlePostNow = async () => {
     if (!formData.content.trim()) {
       showToast('Vui lòng nhập nội dung bài viết', 'error');
@@ -324,7 +309,6 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
     setLoading(true);
 
     try {
-      // Đặt thời gian là hiện tại để đăng ngay
       const createResponse = await fetch(`${API_BASE_URL}/posts/`, {
         method: 'POST',
         headers: {
@@ -339,7 +323,6 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
       if (createResponse.ok) {
         const newPost = await createResponse.json();
         
-        // Gọi API đăng ngay lập tức
         const postNowResponse = await fetch(`${API_BASE_URL}/posts/${newPost.id}/post-now`, {
           method: 'POST',
         });
@@ -347,7 +330,7 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
         if (postNowResponse.ok) {
           onPostCreated(newPost);
           showToast('Bài viết đã được đăng ngay!');
-          onNavigateToPosts(); // Sử dụng prop thay vì useNavigate
+          onNavigateToPosts();
         } else {
           const error = await postNowResponse.json();
           showToast(error.detail || 'Có lỗi khi đăng bài viết', 'error');
@@ -517,7 +500,6 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
                   {uploadedImages.map((image, index) => (
                     <div key={index} className="relative group">
                       <img
-                        // Chú ý: url là đường dẫn tương đối, cần thêm API_BASE_URL
                         src={`${API_BASE_URL}${image.url}`} 
                         alt={`Uploaded ${index + 1}`}
                         className="w-full h-32 object-cover rounded-lg border border-gray-200 shadow-md"
@@ -606,9 +588,10 @@ const CreatePostForm = ({ onPostCreated, facebookTokens, onNavigateToPosts }) =>
   );
 };
 
-// --- Main Application Component (Simple Router) ---
-const App = () => {
-    // Giá trị giả định cho facebookTokens và onPostCreated (cần thiết cho component)
+
+// --- Component chính (Tên được đổi thành CreatePost để khớp với lỗi ESLint của bạn) ---
+const CreatePost = () => {
+    // Giá trị giả định cho facebookTokens 
     const mockFacebookTokens = useMemo(() => [
         { id: '12345', page_name: 'Trang Demo 1' },
         { id: '67890', page_name: 'Trang Demo 2' },
@@ -624,16 +607,8 @@ const App = () => {
     const navigateToPosts = useCallback(() => setCurrentPage('posts'), []);
     const navigateToCreate = useCallback(() => setCurrentPage('create'), []);
 
-    // Hộp thông báo lỗi/thành công đơn giản
-    const { showToast } = useToast();
-    
-    // Xử lý lỗi Objects are not valid as a React child bằng cách đảm bảo chỉ trả về JSX
-    // Lỗi thứ hai (Objects are not valid as a React child) thường xảy ra khi component 
-    // bên ngoài Router cố gắng render, vì vậy việc sửa lỗi useNavigate sẽ giải quyết được lỗi này.
-
     return (
         <div className="min-h-screen bg-gray-100 p-4 md:p-8">
-            {/* Sử dụng một switch statement/conditional rendering để định tuyến đơn giản */}
             {currentPage === 'create' ? (
                 <CreatePostForm 
                     onPostCreated={handlePostCreated}
@@ -649,7 +624,5 @@ const App = () => {
         </div>
     );
 };
-
- 
 
 export default CreatePost;
