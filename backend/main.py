@@ -602,7 +602,8 @@ async def generate_content(request: GenerateContentRequest):
             "Nhiệm vụ của bạn là nhận một mô tả cơ bản từ người dùng (ví dụ: 'Giới thiệu sản phẩm áo thun mới'), "
             "và mở rộng nó thành một bài đăng trên Facebook hấp dẫn, chuyên nghiệp và có tính kêu gọi hành động cao. "
             "Hãy đảm bảo nội dung có cấu trúc tốt (gồm tiêu đề, mô tả sản phẩm/dịch vụ, và lời kêu gọi hành động."
-            "Trả về nội dung để đăng lên Facebook luôn. - Không có dấu * và ** , và không quá 2000 chữ)"
+            "Trả về CHỈ nội dung bài đăng Facebook (text content) duy nhất. KHÔNG bao gồm bất kỳ lời dẫn, lời giới thiệu, "
+            "dấu phân cách markdown (---), hoặc bất kỳ ký tự markdown nào khác (** và *). Đảm bảo nội dung không vượt quá 2000 ký tự."
         )
 
         # --- Logic gọi Gemini API ---
