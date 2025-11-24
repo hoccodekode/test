@@ -630,10 +630,7 @@ const CreatePost = () => {
     * Khi bạn tích hợp với Facebook Login, bạn sẽ cần thay thế phần này bằng cách
     * lấy dữ liệu từ API backend (windshop.site) và lưu vào state.
     */
-    const mockFacebookTokens = useMemo(() => [
-        { id: '12345', page_name: 'Trang Của Bạn 1' },
-        { id: '67890', page_name: 'Trang Của Bạn 2' },
-    ], []);
+    const [facebookTokens, setFacebookTokens] = useState([]);
     
     // BẠN CÓ THỂ THAY THẾ 'mockFacebookTokens' BẰNG STATE DỮ LIỆU THẬT Ở ĐÂY:
     // const [facebookTokens, setFacebookTokens] = useState([]);
