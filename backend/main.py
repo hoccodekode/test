@@ -42,6 +42,11 @@ import traceback # <--- THÊM DÒNG NÀY ĐỂ FIX LỖI 500 TRACEBACK.PRINT_EXC
 # Scheduler
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.date import DateTrigger
+# --- Thêm thư viện gửi email ---
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+# ------------------------------
 
 # AI / Environment
 from dotenv import load_dotenv
@@ -95,7 +100,64 @@ else:
 # ------------------------------
 
  
+# ------------------------------
+# HELPER: GỬI EMAIL
+# ------------------------------
+def send_email_notification(post_id: int, post_content: str, facebook_post_id: str, posted_at: datetime):
+    """
+    Gửi email thông báo khi bài đăng Facebook thành công.
+    """
+    # Load thông tin cấu hình từ .env
+    smtp_server = os.getenv("EMAIL_HOST")
+    smtp_port = int(os.getenv("EMAIL_PORT", 587))
+    sender_email = os.getenv("EMAIL_HOST_USER")
+    sender_password = os.getenv("EMAIL_HOST_PASSWORD")
+    receiver_email = os.getenv("TARGET_EMAIL", "nguyenducphongpro@gmail.com")
 
+    if not all([smtp_server, sender_email, sender_password]):
+        print("CẢNH BÁO: Không đủ thông tin cấu hình email (server, user, password). Bỏ qua gửi email.")
+        return
+
+    # Định dạng nội dung email
+    subject = f"✅ Đăng Bài Thành Công: Post #{post_id}"
+    body = f"""
+    Bài đăng Facebook đã được đăng thành công.
+
+    ---
+    
+    * **Post ID (Local):** {post_id}
+    * **Thời gian đăng:** {posted_at.strftime('%Y-%m-%d %H:%M:%S UTC')}
+    * **Facebook Post ID:** {facebook_post_id}
+    
+    ---
+    
+    **Nội dung bài đăng:**
+    
+    {post_content[:500]}... (Xem chi tiết trên Facebook)
+    
+    ---
+    
+    Trân trọng,
+    Hệ thống AutoFB
+    """
+
+    message = MIMEMultipart()
+    message["From"] = sender_email
+    message["To"] = receiver_email
+    message["Subject"] = subject
+    message.attach(MIMEText(body, "plain"))
+
+    try:
+        # Khởi tạo kết nối SMTP (TLS/STARTTLS)
+        with smtplib.SMTP(smtp_server, smtp_port) as server:
+            server.starttls()
+            server.login(sender_email, sender_password)
+            server.sendmail(sender_email, receiver_email, message.as_string())
+        print(f"Gửi email thông báo thành công tới: {receiver_email}")
+        
+    except Exception as e:
+        print(f"LỖI GỬI EMAIL: Không thể gửi email thông báo: {e}")
+# ------------------------------
 
 # --- Thêm Pydantic Model cho Request ---
 class GenerateContentRequest(BaseModel):
@@ -528,7 +590,14 @@ def post_scheduled_content(post_id: int):
             post.facebook_post_id = result.get("post_id")
             post.posted_at = datetime.now(timezone.utc)
             db.commit()
-            
+            # --- BƯỚC MỚI: GỬI EMAIL THÔNG BÁO ---
+            send_email_notification(
+                post.id, 
+                post.content, 
+                post.facebook_post_id, 
+                post.posted_at
+            )
+            # --------------------------------------
             print(f"Successfully posted to Facebook: {result}")
             
         except Exception as e:
@@ -935,7 +1004,14 @@ async def post_now(post_id: int, db: Session = Depends(get_db)):
         post.posted_at = datetime.now(timezone.utc)
         
         db.commit()
-        
+        # --- BƯỚC MỚI: GỬI EMAIL THÔNG BÁO ---
+        send_email_notification(
+            post.id, 
+            post.content, 
+            post.facebook_post_id, 
+            post.posted_at
+        )
+        # --------------------------------------
         return {
             "message": "Post published to Facebook immediately.",
             "facebook_post_id": post.facebook_post_id,
