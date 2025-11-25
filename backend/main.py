@@ -31,6 +31,7 @@ from pydantic import BaseModel
 
 # Standard / 3rd-party libs
 from datetime import datetime, timedelta, timezone
+import pytz # Thêm dòng này
 from typing import List, Optional
 import requests
 import json
@@ -46,6 +47,7 @@ from apscheduler.triggers.date import DateTrigger
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import pytz # <-- DÒNG MỚI ĐƯỢC THÊM
 # ------------------------------
 
 # AI / Environment
@@ -118,6 +120,21 @@ def send_email_notification(post_id: int, post_content: str, facebook_post_id: s
         print("CẢNH BÁO: Không đủ thông tin cấu hình email (server, user, password). Bỏ qua gửi email.")
         return
 
+    # --- LOGIC CHUYỂN ĐỔI GIỜ UTC SANG GIỜ VIỆT NAM (ICT, UTC+7) ---
+    vietnam_time_str = "Lỗi chuyển đổi múi giờ"
+    try:
+        # Đảm bảo posted_at là timezone-aware (UTC)
+        if posted_at.tzinfo is None or posted_at.tzinfo.utcoffset(posted_at) is None:
+            posted_at = posted_at.replace(tzinfo=timezone.utc)
+            
+        vietnam_tz = pytz.timezone('Asia/Ho_Chi_Minh')
+        vietnam_time = posted_at.astimezone(vietnam_tz)
+        vietnam_time_str = vietnam_time.strftime('%Y-%m-%d %H:%M:%S ICT')
+    except Exception as tz_e:
+        vietnam_time_str = "Không thể chuyển đổi (Cần 'pip install pytz')"
+        print(f"CẢNH BÁO: Lỗi chuyển đổi múi giờ: {tz_e}. Yêu cầu cài đặt 'pytz'.")
+    # --------------------------------------------------
+
     # Định dạng nội dung email
     subject = f"✅ Đăng Bài Thành Công: Post #{post_id}"
     body = f"""
@@ -126,7 +143,8 @@ def send_email_notification(post_id: int, post_content: str, facebook_post_id: s
     ---
     
     * **Post ID (Local):** {post_id}
-    * **Thời gian đăng:** {posted_at.strftime('%Y-%m-%d %H:%M:%S UTC')}
+    * **Thời gian đăng (UTC):** {posted_at.strftime('%Y-%m-%d %H:%M:%S UTC')}
+    * **Thời gian đăng (VIỆT NAM):** {vietnam_time_str}
     * **Facebook Post ID:** {facebook_post_id}
     
     ---
