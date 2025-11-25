@@ -140,16 +140,11 @@ def send_email_notification(post_id: int, post_content: str, facebook_post_id: s
     body = f"""
     Bài đăng Facebook đã được đăng thành công.
 
-    ---
-    
-    * **Post ID (Local):** {post_id}
-    * **Thời gian đăng (UTC):** {posted_at.strftime('%Y-%m-%d %H:%M:%S UTC')}
-    * **Thời gian đăng (VIỆT NAM):** {vietnam_time_str}
-    * **Facebook Post ID:** {facebook_post_id}
-    
-    ---
-    
-    **Nội dung bài đăng:**
+    Post ID (Local):{post_id}
+    Thời gian đăng: {vietnam_time_str}
+    Facebook Post ID: {facebook_post_id}
+
+    Nội dung bài đăng:
     
     {post_content[:500]}... (Xem chi tiết trên Facebook)
     
@@ -608,20 +603,28 @@ def post_scheduled_content(post_id: int):
             post.facebook_post_id = result.get("post_id")
             post.posted_at = datetime.now(timezone.utc)
             db.commit()
-            # --- BƯỚC MỚI: GỬI EMAIL THÔNG BÁO ---
-            send_email_notification(
-                post.id, 
-                post.content, 
-                post.facebook_post_id, 
-                post.posted_at
-            )
-            # --------------------------------------
+            
             print(f"Successfully posted to Facebook: {result}")
+
+            # --- BƯỚC GỬI EMAIL THÔNG BÁO ---
+            try:
+                send_email_notification(
+                    post.id, 
+                    post.content, 
+                    post.facebook_post_id, 
+                    post.posted_at
+                )
+                print("STATUS: Đã cố gắng gửi email thông báo.") # <-- Thêm log này
+            except Exception as email_e:
+                # Log riêng lỗi gửi email (RẤT QUAN TRỌNG)
+                print(f"LỖI GỬI EMAIL (Background Job): {email_e}")
+            # --------------------------------------
             
         except Exception as e:
             # Log lỗi, job không crash scheduler
             print(f"Error posting to Facebook: {e}")
-    
+            db.rollback() # Nếu đăng FB thất bại, rollback DB
+
     finally:
         db.close()
 
