@@ -84,7 +84,6 @@ const Dashboard = ({ posts = [], facebookTokens = [], onRefresh, isLoading }) =>
     { name: 'Đã Lên Lịch', value: stats.scheduled, color: '#f59e0b' },
     { name: 'Đã Đăng', value: stats.posted, color: '#10b981' },
     { name: 'Hôm Nay', value: stats.today, color: '#8b5cf6' },
-    // Không bao gồm Total vì nó là tổng của các mục khác, dễ gây hiểu lầm
   ];
   
   // 2. Dữ liệu cho Line Chart (Xu hướng 7 ngày gần nhất)
@@ -102,6 +101,7 @@ const Dashboard = ({ posts = [], facebookTokens = [], onRefresh, isLoading }) =>
 
     // Đếm bài viết đã đăng
     posts.filter(post => post.posted).forEach(post => {
+      // SỬ DỤNG POSTED_AT cho bài đã đăng
       const postedTimeUTC = parseScheduledTime(post.posted_at);
       if (!postedTimeUTC) return;
 
@@ -166,27 +166,30 @@ const Dashboard = ({ posts = [], facebookTokens = [], onRefresh, isLoading }) =>
       </div>
     </div>
   );
-
-  const ChartPlaceholder = ({ title }) => (
-    <div className="bg-white rounded-lg shadow h-96 flex items-center justify-center flex-col">
-        <Loader2 className="h-8 w-8 text-primary-500 animate-spin mb-3" />
-        <p className="text-gray-500">{title} đang tải...</p>
-    </div>
-  );
+  
+  // Đảm bảo ChartPlaceholder trả về JSX element hợp lệ
+  const ChartPlaceholder = ({ title }) => {
+    return (
+      <div className="bg-white rounded-lg shadow h-96 flex items-center justify-center flex-col">
+          <Loader2 className="h-8 w-8 text-primary-500 animate-spin mb-3" />
+          <p className="text-gray-500">{title} đang tải...</p>
+      </div>
+    );
+  };
 
   // =================================================================
   // RENDER CHÍNH
   // =================================================================
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-4 sm:p-6 lg:p-8">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
         <button
           onClick={onRefresh}
-          className="flex items-center bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors disabled:bg-gray-400"
+          className="flex items-center bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors disabled:bg-gray-400 font-medium"
           disabled={isLoading}
         >
-          {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+          {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
           Làm mới
         </button>
       </div>
@@ -226,6 +229,7 @@ const Dashboard = ({ posts = [], facebookTokens = [], onRefresh, isLoading }) =>
           <h2 className="text-xl font-semibold text-gray-900 mb-4">
             Tóm tắt Trạng thái Bài viết
           </h2>
+          {/* SỬA LỖI: Đảm bảo ChartPlaceholder được gọi đúng cách */}
           {isLoading ? <ChartPlaceholder title="Biểu đồ trạng thái" /> : (
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={barChartData} margin={{ top: 10, right: 30, left: 0, bottom: 5 }}>
@@ -237,7 +241,8 @@ const Dashboard = ({ posts = [], facebookTokens = [], onRefresh, isLoading }) =>
                   contentStyle={{ 
                     borderRadius: '8px', 
                     border: '1px solid #d1d5db', 
-                    backgroundColor: 'white' 
+                    backgroundColor: 'white',
+                    padding: '8px'
                   }}
                   formatter={(value) => [`${value} bài`, 'Số lượng']}
                 />
@@ -256,6 +261,7 @@ const Dashboard = ({ posts = [], facebookTokens = [], onRefresh, isLoading }) =>
           <h2 className="text-xl font-semibold text-gray-900 mb-4">
             Xu hướng Đăng bài (7 Ngày gần nhất)
           </h2>
+          {/* SỬA LỖI: Đảm bảo ChartPlaceholder được gọi đúng cách */}
           {isLoading ? <ChartPlaceholder title="Biểu đồ xu hướng" /> : (
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={lineChartData} margin={{ top: 10, right: 30, left: 0, bottom: 5 }}>
@@ -266,7 +272,8 @@ const Dashboard = ({ posts = [], facebookTokens = [], onRefresh, isLoading }) =>
                   contentStyle={{ 
                     borderRadius: '8px', 
                     border: '1px solid #d1d5db', 
-                    backgroundColor: 'white' 
+                    backgroundColor: 'white',
+                    padding: '8px'
                   }}
                   labelFormatter={(label) => `Ngày ${label}`}
                   formatter={(value) => [`${value} bài`, 'Đã đăng']}
