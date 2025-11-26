@@ -10,25 +10,33 @@ import {
   Plus
 } from 'lucide-react';
 
-// Dashboard.jsx (Bên trong component Dashboard)
-const Dashboard = ({ posts, facebookTokens, onRefresh }) => {
+// FIX: Cung cấp giá trị mặc định là mảng rỗng [] cho posts và facebookTokens
+const Dashboard = ({ posts = [], facebookTokens = [], onRefresh }) => {
   const now = new Date();
   
-  // Hàm Helper để chuyển đổi và định dạng sang Giờ Việt Nam (UTC+7)
-  const formatDateTimeToVietnam = (dateString) => {
-    if (!dateString) return 'N/A';
-    
+  // =================================================================
+  // HÀM HELPER XỬ LÝ MÚI GIỜ (Phải định nghĩa trước khi dùng trong stats)
+  // =================================================================
+  // Hàm Helper: Đảm bảo chuỗi thời gian từ Backend được coi là UTC để so sánh
+  const parseScheduledTime = (dateString) => {
+    if (!dateString) return null;
     let dateToParse = dateString;
-    // 1. Buộc JS hiểu chuỗi là UTC bằng cách thêm 'Z'
+    // Thêm 'Z' để buộc JS hiểu đây là thời gian UTC
     if (!dateString.includes('T')) {
         dateToParse = dateString.replace(' ', 'T') + 'Z'; 
     } else if (!dateString.endsWith('Z') && !dateString.includes('+')) {
-        dateToParse = dateString + 'Z';
+        dateToParse = dateToParse + 'Z';
     }
+    return new Date(dateToParse);
+  };
 
-    const dateObj = new Date(dateToParse);
+  // Hàm Helper để chuyển đổi và định dạng sang Giờ Việt Nam (UTC+7)
+  const formatDateTimeToVietnam = (dateString) => {
+    const dateObj = parseScheduledTime(dateString);
+
+    if (!dateObj) return 'N/A';
     
-    // 2. Chuyển đổi và định dạng sang múi giờ Việt Nam
+    // Chuyển đổi và định dạng sang múi giờ Việt Nam
     return dateObj.toLocaleString('vi-VN', {
       year: 'numeric',
       month: '2-digit',
@@ -40,49 +48,70 @@ const Dashboard = ({ posts, facebookTokens, onRefresh }) => {
     });
   };
   
+  // =================================================================
+  // LOGIC THỐNG KÊ (Sử dụng hàm parseScheduledTime)
+  // =================================================================
   const stats = {
     total: posts.length,
-    scheduled: posts.filter(post => !post.posted && new Date(post.scheduled_time) > now).length,
+    // Sửa lỗi thống kê: Dùng parseScheduledTime để so sánh múi giờ chính xác
+    scheduled: posts.filter(post => {
+      if (post.posted) return false;
+      const scheduledTimeUTC = parseScheduledTime(post.scheduled_time);
+      // So sánh thời gian lên lịch (UTC) với thời gian hiện tại (UTC)
+      return scheduledTimeUTC && scheduledTimeUTC > now;
+    }).length,
+    
     posted: posts.filter(post => post.posted).length,
+    
+    // Sửa logic thống kê Hôm nay: Cần chuyển scheduled_time sang Giờ VN trước khi so sánh ngày
     today: posts.filter(post => {
-      const postDate = new Date(post.scheduled_time);
-      return postDate.toDateString() === now.toDateString();
+      const scheduledTime = parseScheduledTime(post.scheduled_time);
+      if (!scheduledTime) return false;
+      
+      // Chuyển scheduled_time sang múi giờ Việt Nam để lấy ngày chính xác
+      const scheduledDateVN = new Date(scheduledTime.toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
+      
+      // Lấy ngày hôm nay theo múi giờ Việt Nam để so sánh
+      const nowVN = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
+
+      return scheduledDateVN.toDateString() === nowVN.toDateString();
     }).length
   };
 
-// Hàm Helper để xử lý chuỗi thời gian không có múi giờ từ Backend
-const parseScheduledTime = (dateString) => {
-  if (!dateString) return null;
-  let dateToParse = dateString;
-  // Thêm 'Z' để buộc JS hiểu đây là thời gian UTC
-  if (!dateString.includes('T')) {
-      dateToParse = dateString.replace(' ', 'T') + 'Z'; 
-  } else if (!dateString.endsWith('Z') && !dateString.includes('+')) {
-      dateToParse = dateString + 'Z';
-  }
-  return new Date(dateToParse);
-};
-
-
+  // =================================================================
+  // LOGIC LỌC BÀI VIẾT SẮP TỚI
+  // =================================================================
   const upcomingPosts = posts
-   .filter(post => {
-      // 1. Chỉ lấy bài chưa đăng
-      if (post.posted) {
-          return false;
-      }
+    .filter(post => {
+        // 1. Chỉ lấy bài chưa đăng
+        if (post.posted) {
+            return false;
+        }
 
-      // 2. Chuyển đổi scheduled_time thành đối tượng Date được xem là UTC
-      const scheduledTimeUTC = parseScheduledTime(post.scheduled_time);
-      
-      // 3. So sánh với thời gian hiện tại (cũng là UTC)
-      return scheduledTimeUTC > now; // So sánh 2 đối tượng Date
-  })
-  .sort((a, b) => parseScheduledTime(a.scheduled_time) - parseScheduledTime(b.scheduled_time))
-  .slice(0, 5);
+        // 2. Chuyển đổi scheduled_time thành đối tượng Date được xem là UTC
+        const scheduledTimeUTC = parseScheduledTime(post.scheduled_time);
+        
+        // 3. So sánh với thời gian hiện tại (cũng là UTC)
+        return scheduledTimeUTC > now; 
+    })
+    // Sắp xếp bài viết bằng hàm parseScheduledTime
+    .sort((a, b) => {
+      const timeA = parseScheduledTime(a.scheduled_time);
+      const timeB = parseScheduledTime(b.scheduled_time);
+      if (!timeA || !timeB) return 0;
+      return timeA - timeB;
+    })
+    .slice(0, 5);
 
   const recentPosts = posts
     .filter(post => post.posted)
-    .sort((a, b) => new Date(b.posted_at) - new Date(a.posted_at))
+    // Sắp xếp bài viết đã đăng bằng hàm parseScheduledTime
+    .sort((a, b) => {
+      const timeA = parseScheduledTime(b.posted_at);
+      const timeB = parseScheduledTime(a.posted_at);
+      if (!timeA || !timeB) return 0;
+      return timeA - timeB;
+    })
     .slice(0, 5);
 
   const StatCard = ({ title, value, icon: Icon, color = "blue" }) => (
@@ -171,7 +200,8 @@ const parseScheduledTime = (dateString) => {
                           {post.images.slice(0, 3).map((image, index) => (
                             <img 
                               key={index}
-                              ssrc={image.image_path ? 
+                              // Đã sửa 'ssrc' thành 'src'
+                              src={image.image_path ? 
                                 `https://windshop.site/api/uploads/${image.image_path.split('/').pop()}` : 
                                 image.image_url
                             }
