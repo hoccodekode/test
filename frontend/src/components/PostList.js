@@ -144,7 +144,7 @@ const PostList = ({ posts, onPostUpdated, onPostDeleted }) => {
       timeZone: 'Asia/Ho_Chi_Minh', // Bắt buộc chuyển sang UTC+7
       hour12: false // Tùy chọn 24h
     });
-  };Expired
+  };  
 
 
   return (
