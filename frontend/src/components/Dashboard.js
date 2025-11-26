@@ -10,9 +10,6 @@ import {
   Plus
 } from 'lucide-react';
 
-// Thêm Recharts cho biểu đồ
-import { PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer } from 'recharts';
-
 // FIX: Cung cấp giá trị mặc định là mảng rỗng [] cho posts và facebookTokens
 const Dashboard = ({ posts = [], facebookTokens = [], onRefresh }) => {
   const now = new Date();
@@ -130,81 +127,6 @@ const Dashboard = ({ posts = [], facebookTokens = [], onRefresh }) => {
       </div>
     </div>
   );
-  
-  // =================================================================
-  // LOGIC VÀ COMPONENT BIỂU ĐỒ MỚI
-  // =================================================================
-
-  // 1. Chuẩn bị dữ liệu cho Biểu đồ tròn
-  const nonScheduledOrMissed = stats.total - stats.posted - stats.scheduled;
-
-  const chartData = [
-    { name: 'Đã Đăng (Posted)', value: stats.posted, color: '#10B981' }, // Green
-    { name: 'Đang Chờ (Scheduled)', value: stats.scheduled, color: '#F59E0B' }, // Yellow
-    { name: 'Chưa Hoàn Thành (Draft/Missed)', value: nonScheduledOrMissed > 0 ? nonScheduledOrMissed : 0, color: '#EF4444' }, // Red
-  ];
-  
-  // Màu sắc tương ứng cho Biểu đồ tròn
-  const COLORS = chartData.map(item => item.color);
-  
-  // Hàm render nhãn cho Pie Chart
-  const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, index }) => {
-    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
-    const x = cx + radius * Math.cos(-midAngle * Math.PI / 180);
-    const y = cy + radius * Math.sin(-midAngle * Math.PI / 180);
-  
-    return (
-      <text x={x} y={y} fill="white" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central">
-        {`${(percent * 100).toFixed(0)}%`}
-      </text>
-    );
-  };
-  
-  const PostStatusChart = () => (
-    <div className="bg-white rounded-lg shadow col-span-1 lg:col-span-2">
-      <div className="p-6 border-b">
-        <h2 className="text-xl font-semibold text-gray-900 flex items-center">
-          <TrendingUp className="h-5 w-5 mr-2 text-primary-600" />
-          Phân tích trạng thái bài viết
-        </h2>
-      </div>
-      <div className="p-6">
-        {stats.total === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            Chưa có dữ liệu bài viết để hiển thị biểu đồ.
-          </div>
-        ) : (
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={chartData.filter(d => d.value > 0)} // Chỉ hiển thị các slice có giá trị > 0
-                cx="50%"
-                cy="50%"
-                innerRadius={60}
-                outerRadius={100}
-                fill="#8884d8"
-                paddingAngle={5}
-                dataKey="value"
-                labelLine={false}
-                label={renderCustomizedLabel}
-              >
-                {chartData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip />
-              <Legend 
-                layout="horizontal" 
-                verticalAlign="bottom" 
-                align="center" 
-                wrapperStyle={{ paddingTop: '20px' }}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-        )}
-      </div>
-    </div>
-  );
 
   return (
     <div className="space-y-6">
@@ -244,11 +166,6 @@ const Dashboard = ({ posts = [], facebookTokens = [], onRefresh }) => {
           icon={TrendingUp}
           color="purple"
         />
-      </div>
-      
-      {/* Biểu đồ trạng thái bài viết (MỚI) */}
-      <div className="grid grid-cols-1 gap-6">
-        <PostStatusChart />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
