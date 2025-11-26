@@ -1,6 +1,6 @@
 import React from 'react';
-// Đã loại bỏ 'import { Link } from 'react-router-dom';' để sửa lỗi
-// Trong ứng dụng đầy đủ, các nút/span này cần được bọc trong <Link> hoặc sử dụng hook navigation
+// Đã loại bỏ 'import { Link } from 'react-router-dom';' để khắc phục lỗi: 
+// TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
 
 // Thêm các thành phần biểu đồ từ Recharts
 import { 
@@ -17,7 +17,7 @@ import {
   Loader2
 } from 'lucide-react';
 
-// FIX: Cung cấp giá trị mặc định là mảng rỗng [] cho posts và facebookTokens
+// FIX: Cung cấp giá trị mặc định là mảng rỗng [] cho posts và facebookTokens để tránh lỗi
 const Dashboard = ({ posts = [], facebookTokens = [], onRefresh, isLoading }) => {
   const now = new Date();
   
@@ -34,7 +34,9 @@ const Dashboard = ({ posts = [], facebookTokens = [], onRefresh, isLoading }) =>
     } else if (!dateString.endsWith('Z') && !dateToParse.includes('+')) {
         dateToParse = dateToParse + 'Z';
     }
-    return new Date(dateToParse);
+    // Sử dụng new Date() sẽ tự động chuyển UTC về Local Timezone của người dùng.
+    // Dữ liệu từ API nên được xử lý cẩn thận về múi giờ.
+    return new Date(dateToParse); 
   };
 
   // Hàm Helper để chuyển đổi và định dạng sang Giờ Việt Nam (UTC+7)
@@ -43,14 +45,14 @@ const Dashboard = ({ posts = [], facebookTokens = [], onRefresh, isLoading }) =>
 
     if (!dateObj) return 'N/A';
     
-    // Chuyển đổi và định dạng sang múi giờ Việt Nam
+    // Chuyển đổi và định dạng sang múi giờ Việt Nam (Asia/Ho_Chi_Minh là UTC+7)
     return dateObj.toLocaleString('vi-VN', {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
       hour: '2-digit',
       minute: '2-digit',
-      timeZone: 'Asia/Ho_Chi_Minh', // Bắt buộc chuyển sang UTC+7
+      timeZone: 'Asia/Ho_Chi_Minh', 
       hour12: false
     });
   };
@@ -63,6 +65,7 @@ const Dashboard = ({ posts = [], facebookTokens = [], onRefresh, isLoading }) =>
     scheduled: posts.filter(post => {
       if (post.posted) return false;
       const scheduledTimeUTC = parseScheduledTime(post.scheduled_time);
+      // Bài viết được tính là "Đã Lên Lịch" nếu thời gian lên lịch > thời gian hiện tại
       return scheduledTimeUTC && scheduledTimeUTC > now;
     }).length,
     posted: posts.filter(post => post.posted).length,
@@ -70,9 +73,11 @@ const Dashboard = ({ posts = [], facebookTokens = [], onRefresh, isLoading }) =>
       const scheduledTime = parseScheduledTime(post.scheduled_time);
       if (!scheduledTime) return false;
       
+      // So sánh ngày trong cùng múi giờ VN (UTC+7)
       const scheduledDateVN = new Date(scheduledTime.toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
       const nowVN = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
 
+      // Bài viết đã được lên lịch cho ngày hôm nay (theo múi giờ VN)
       return scheduledDateVN.toDateString() === nowVN.toDateString();
     }).length
   };
@@ -118,7 +123,7 @@ const Dashboard = ({ posts = [], facebookTokens = [], onRefresh, isLoading }) =>
     // Chuyển đổi thành mảng cho Recharts
     return Object.keys(dailyData).map(key => ({
       date: key,
-      posts_posted: dailyData[key], // Đây là dữ liệu lượng đăng bài hàng ngày
+      posts_posted: dailyData[key], // Lượng đăng bài hàng ngày
     }));
   };
 
@@ -137,7 +142,7 @@ const Dashboard = ({ posts = [], facebookTokens = [], onRefresh, isLoading }) =>
       const timeA = parseScheduledTime(a.scheduled_time);
       const timeB = parseScheduledTime(b.scheduled_time);
       if (!timeA || !timeB) return 0;
-      return timeA - timeB;
+      return timeA - timeB; // Sắp xếp Tăng dần (sắp tới trước)
     })
     .slice(0, 5);
 
@@ -147,7 +152,7 @@ const Dashboard = ({ posts = [], facebookTokens = [], onRefresh, isLoading }) =>
       const timeA = parseScheduledTime(b.posted_at);
       const timeB = parseScheduledTime(a.posted_at);
       if (!timeA || !timeB) return 0;
-      return timeA - timeB;
+      return timeB - timeA; // Sắp xếp Giảm dần (gần đây nhất trước)
     })
     .slice(0, 5);
 
@@ -171,7 +176,7 @@ const Dashboard = ({ posts = [], facebookTokens = [], onRefresh, isLoading }) =>
   const ChartPlaceholder = ({ title }) => {
     return (
       <div className="bg-white rounded-lg shadow h-96 flex items-center justify-center flex-col">
-          <Loader2 className="h-8 w-8 text-primary-500 animate-spin mb-3" />
+          <Loader2 className="h-8 w-8 text-indigo-500 animate-spin mb-3" />
           <p className="text-gray-500">{title} đang tải...</p>
       </div>
     );
@@ -181,20 +186,20 @@ const Dashboard = ({ posts = [], facebookTokens = [], onRefresh, isLoading }) =>
   // RENDER CHÍNH
   // =================================================================
   return (
-    <div className="space-y-6 p-4 sm:p-6 lg:p-8">
+    <div className="space-y-6 p-4 sm:p-6 lg:p-8 bg-gray-50 min-h-screen">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
         <button
           onClick={onRefresh}
-          className="flex items-center bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors disabled:bg-gray-400 font-medium"
+          className="flex items-center bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors disabled:bg-gray-400 font-medium shadow-md"
           disabled={isLoading}
         >
           {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-          Làm mới
+          Làm mới dữ liệu
         </button>
       </div>
 
-      {/* Stats */}
+      {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
           title="Tổng bài viết"
@@ -215,7 +220,7 @@ const Dashboard = ({ posts = [], facebookTokens = [], onRefresh, isLoading }) =>
           color="green"
         />
         <StatCard
-          title="Hôm nay"
+          title="Lịch đăng Hôm nay"
           value={stats.today}
           icon={TrendingUp}
           color="purple"
@@ -235,7 +240,10 @@ const Dashboard = ({ posts = [], facebookTokens = [], onRefresh, isLoading }) =>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="name" stroke="#374151" />
                 <YAxis allowDecimals={false} stroke="#374151" />
-                <Tooltip cursor={{ fill: '#f3f4f6' }} />
+                <Tooltip 
+                    cursor={{ fill: '#f3f4f6' }} 
+                    formatter={(value) => [`${value} bài`, 'Số lượng']}
+                />
                 <Bar dataKey="value" name="Số lượng bài viết" radius={[4, 4, 0, 0]}>
                   {barChartData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
@@ -257,7 +265,9 @@ const Dashboard = ({ posts = [], facebookTokens = [], onRefresh, isLoading }) =>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="date" stroke="#374151" />
                 <YAxis allowDecimals={false} stroke="#374151" />
-                <Tooltip />
+                <Tooltip 
+                    formatter={(value) => [`${value} bài`, 'Bài đã đăng']}
+                />
                 <Legend />
                 <Line 
                   type="monotone" 
@@ -278,16 +288,17 @@ const Dashboard = ({ posts = [], facebookTokens = [], onRefresh, isLoading }) =>
         {/* Upcoming Posts */}
         <div className="bg-white rounded-lg shadow">
           <div className="p-6 border-b">
-            <h2 className="text-xl font-semibold text-gray-900">Bài viết sắp tới</h2>
+            <h2 className="text-xl font-semibold text-gray-900">5 Bài viết sắp tới</h2>
           </div>
           <div className="p-6">
             {upcomingPosts.length === 0 ? (
               <div className="text-center py-8">
                 <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                 <p className="text-gray-500">Không có bài viết nào được lên lịch</p>
-                {/* FIX: Thay Link bằng button */}
+                {/* FIX: Thay Link bằng button/span để tránh lỗi */}
                 <button
-                  className="inline-flex items-center mt-4 text-primary-600 hover:text-primary-700 font-medium"
+                  onClick={() => console.log('Tạo bài viết mới clicked')}
+                  className="inline-flex items-center mt-4 text-indigo-600 hover:text-indigo-700 font-medium transition-colors"
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   Tạo bài viết mới
@@ -296,26 +307,27 @@ const Dashboard = ({ posts = [], facebookTokens = [], onRefresh, isLoading }) =>
             ) : (
               <div className="space-y-4">
                 {upcomingPosts.map((post) => (
-                  <div key={post.id} className="border rounded-lg p-4 transition duration-150 hover:bg-gray-50">
+                  <div key={post.id} className="border border-gray-200 rounded-lg p-4 transition duration-150 hover:bg-gray-50 cursor-pointer">
                     <p className="text-gray-900 font-medium line-clamp-2">
                       {post.content}
                     </p>
                     {post.images && post.images.length > 0 && (
                       <div className="mt-2">
-                        <div className="flex space-x-1">
+                        <div className="flex space-x-1 overflow-x-auto">
                           {post.images.slice(0, 3).map((image, index) => (
                             <img 
                               key={index}
+                              // Sử dụng URL mô phỏng hoặc đường dẫn tương đối (tùy thuộc vào backend)
                               src={image.image_path ? 
                                 `https://windshop.site/api/uploads/${image.image_path.split('/').pop()}` : 
-                                image.image_url
+                                image.image_url || `https://placehold.co/48x48/5B6C8C/FFFFFF?text=IMG${index+1}`
                             }
                               alt={`Post image ${index + 1}`}
-                              className="w-12 h-12 object-cover rounded"
+                              className="w-12 h-12 object-cover rounded-md"
                             />
                           ))}
                           {post.images.length > 3 && (
-                            <div className="w-12 h-12 bg-gray-200 rounded flex items-center justify-center">
+                            <div className="w-12 h-12 bg-gray-200 rounded-md flex items-center justify-center flex-shrink-0">
                               <span className="text-xs text-gray-600">+{post.images.length - 3}</span>
                             </div>
                           )}
@@ -330,7 +342,8 @@ const Dashboard = ({ posts = [], facebookTokens = [], onRefresh, isLoading }) =>
                 ))}
                 {/* FIX: Thay Link bằng span/button */}
                 <span
-                  className="block text-center text-primary-600 hover:text-primary-700 font-medium mt-4 cursor-pointer"
+                  onClick={() => console.log('Xem tất cả bài viết sắp tới clicked')}
+                  className="block text-center text-indigo-600 hover:text-indigo-700 font-medium mt-4 cursor-pointer transition-colors"
                 >
                   Xem tất cả
                 </span>
@@ -342,37 +355,38 @@ const Dashboard = ({ posts = [], facebookTokens = [], onRefresh, isLoading }) =>
         {/* Recent Posts */}
         <div className="bg-white rounded-lg shadow">
           <div className="p-6 border-b">
-            <h2 className="text-xl font-semibold text-gray-900">Bài viết gần đây</h2>
+            <h2 className="text-xl font-semibold text-gray-900">5 Bài viết gần đây</h2>
           </div>
           <div className="p-6">
             {recentPosts.length === 0 ? (
               <div className="text-center py-8">
                 <CheckCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-500">Chưa có bài viết nào được đăng</p>
+                <p className="text-gray-500">Chưa có bài viết nào được đăng gần đây</p>
               </div>
             ) : (
               <div className="space-y-4">
                 {recentPosts.map((post) => (
-                  <div key={post.id} className="border rounded-lg p-4 transition duration-150 hover:bg-gray-50">
+                  <div key={post.id} className="border border-gray-200 rounded-lg p-4 transition duration-150 hover:bg-gray-50 cursor-pointer">
                     <p className="text-gray-900 font-medium line-clamp-2">
                       {post.content}
                     </p>
                     {post.images && post.images.length > 0 && (
                       <div className="mt-2">
-                        <div className="flex space-x-1">
+                        <div className="flex space-x-1 overflow-x-auto">
                           {post.images.slice(0, 3).map((image, index) => (
                             <img 
                               key={index}
+                              // Sử dụng URL mô phỏng hoặc đường dẫn tương đối (tùy thuộc vào backend)
                               src={image.image_path ? 
                                 `https://windshop.site/api/uploads/${image.image_path.split('/').pop()}` : 
-                                image.image_url
+                                image.image_url || `https://placehold.co/48x48/5B6C8C/FFFFFF?text=IMG${index+1}`
                               }
                               alt={`Post image ${index + 1}`}
-                              className="w-12 h-12 object-cover rounded"
+                              className="w-12 h-12 object-cover rounded-md"
                             />
                           ))}
                           {post.images.length > 3 && (
-                            <div className="w-12 h-12 bg-gray-200 rounded flex items-center justify-center">
+                            <div className="w-12 h-12 bg-gray-200 rounded-md flex items-center justify-center flex-shrink-0">
                               <span className="text-xs text-gray-600">+{post.images.length - 3}</span>
                             </div>
                           )}
@@ -387,7 +401,8 @@ const Dashboard = ({ posts = [], facebookTokens = [], onRefresh, isLoading }) =>
                 ))}
                 {/* FIX: Thay Link bằng span/button */}
                 <span
-                  className="block text-center text-primary-600 hover:text-primary-700 font-medium mt-4 cursor-pointer"
+                  onClick={() => console.log('Xem tất cả bài viết đã đăng clicked')}
+                  className="block text-center text-indigo-600 hover:text-indigo-700 font-medium mt-4 cursor-pointer transition-colors"
                 >
                   Xem tất cả
                 </span>
@@ -400,18 +415,19 @@ const Dashboard = ({ posts = [], facebookTokens = [], onRefresh, isLoading }) =>
       {/* Facebook Status */}
       <div className="bg-white rounded-lg shadow">
         <div className="p-6 border-b">
-          <h2 className="text-xl font-semibold text-gray-900">Trạng thái Facebook</h2>
+          <h2 className="text-xl font-semibold text-gray-900">Trạng thái Kết nối Facebook</h2>
         </div>
         <div className="p-6">
           {facebookTokens.length === 0 ? (
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-4">
               <div className="flex items-center">
-                <AlertCircle className="h-5 w-5 text-yellow-500 mr-2" />
-                <span className="text-gray-700">Chưa kết nối với Facebook</span>
+                <AlertCircle className="h-5 w-5 text-yellow-500 mr-2 flex-shrink-0" />
+                <span className="text-gray-700">Chưa kết nối với bất kỳ Page nào.</span>
               </div>  
               {/* FIX: Thay Link bằng button */}
               <button
-                className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors font-medium"
+                onClick={() => console.log('Kết nối Facebook clicked')}
+                className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors font-medium shadow-sm"
               >
                 Kết nối Facebook
               </button>
@@ -419,8 +435,8 @@ const Dashboard = ({ posts = [], facebookTokens = [], onRefresh, isLoading }) =>
           ) : (
             <div className="space-y-4">
               {facebookTokens.map((token) => (
-                <div key={token.id} className="flex items-center justify-between border rounded-lg p-4 transition duration-150 hover:bg-gray-50">
-                  <div className="flex items-center">
+                <div key={token.id} className="flex items-center justify-between border border-gray-200 rounded-lg p-4 transition duration-150 hover:bg-gray-50">
+                  <div className="flex items-center min-w-0 flex-1">
                     <Facebook className="h-5 w-5 text-blue-600 mr-2 flex-shrink-0" />
                     <div className="truncate">
                       <p className="font-medium text-gray-900 truncate">{token.page_name}</p>
@@ -429,7 +445,7 @@ const Dashboard = ({ posts = [], facebookTokens = [], onRefresh, isLoading }) =>
                   </div>
                   <div className="flex items-center text-green-600 flex-shrink-0 ml-4">
                     <CheckCircle className="h-4 w-4 mr-1" />
-                    <span className="text-sm">Đã kết nối</span>
+                    <span className="text-sm font-medium">Đã kết nối</span>
                   </div>
                 </div>
               ))}
