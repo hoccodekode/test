@@ -94,12 +94,19 @@ const PostList = ({ posts, onPostUpdated, onPostDeleted }) => {
   };
 
   const formatDateTime = (dateString) => {
+    // Nếu dateString là null hoặc undefined, trả về chuỗi rỗng
+    if (!dateString) return 'N/A';
+    
+    // Sử dụng múi giờ 'Asia/Ho_Chi_Minh' (UTC+7) để đảm bảo hiển thị đúng giờ Việt Nam cho mọi người dùng
     return new Date(dateString).toLocaleString('vi-VN', {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
+      // THÊM CẤU HÌNH MÚI GIỜ BẮT BUỘC:
+      timeZone: 'Asia/Ho_Chi_Minh'
+      // Tùy chọn thêm: hour12: false để hiển thị 24h
     });
   };
 
