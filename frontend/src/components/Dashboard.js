@@ -101,7 +101,6 @@ const Dashboard = ({ posts = [], facebookTokens = [], onRefresh, isLoading }) =>
 
     // Đếm bài viết đã đăng
     posts.filter(post => post.posted).forEach(post => {
-      // SỬ DỤNG POSTED_AT cho bài đã đăng
       const postedTimeUTC = parseScheduledTime(post.posted_at);
       if (!postedTimeUTC) return;
 
@@ -167,7 +166,6 @@ const Dashboard = ({ posts = [], facebookTokens = [], onRefresh, isLoading }) =>
     </div>
   );
   
-  // Đảm bảo ChartPlaceholder trả về JSX element hợp lệ
   const ChartPlaceholder = ({ title }) => {
     return (
       <div className="bg-white rounded-lg shadow h-96 flex items-center justify-center flex-col">
@@ -229,23 +227,14 @@ const Dashboard = ({ posts = [], facebookTokens = [], onRefresh, isLoading }) =>
           <h2 className="text-xl font-semibold text-gray-900 mb-4">
             Tóm tắt Trạng thái Bài viết
           </h2>
-          {/* SỬA LỖI: Đảm bảo ChartPlaceholder được gọi đúng cách */}
-          {isLoading ? <ChartPlaceholder title="Biểu đồ trạng thái" /> : (
+          {isLoading ? <ChartPlaceholder title="Biểu đồ trạng thái" /> : 
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={barChartData} margin={{ top: 10, right: 30, left: 0, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="name" stroke="#374151" />
                 <YAxis allowDecimals={false} stroke="#374151" />
-                <Tooltip 
-                  cursor={{ fill: '#f3f4f6' }}
-                  contentStyle={{ 
-                    borderRadius: '8px', 
-                    border: '1px solid #d1d5db', 
-                    backgroundColor: 'white',
-                    padding: '8px'
-                  }}
-                  formatter={(value) => [`${value} bài`, 'Số lượng']}
-                />
+                {/* Đơn giản hóa Tooltip */}
+                <Tooltip cursor={{ fill: '#f3f4f6' }} />
                 <Bar dataKey="value" name="Số lượng bài viết" radius={[4, 4, 0, 0]}>
                   {barChartData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
@@ -253,7 +242,7 @@ const Dashboard = ({ posts = [], facebookTokens = [], onRefresh, isLoading }) =>
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-          )}
+          }
         </div>
 
         {/* Biểu đồ 2: Xu hướng đăng bài 7 ngày */}
@@ -261,23 +250,14 @@ const Dashboard = ({ posts = [], facebookTokens = [], onRefresh, isLoading }) =>
           <h2 className="text-xl font-semibold text-gray-900 mb-4">
             Xu hướng Đăng bài (7 Ngày gần nhất)
           </h2>
-          {/* SỬA LỖI: Đảm bảo ChartPlaceholder được gọi đúng cách */}
-          {isLoading ? <ChartPlaceholder title="Biểu đồ xu hướng" /> : (
+          {isLoading ? <ChartPlaceholder title="Biểu đồ xu hướng" /> : 
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={lineChartData} margin={{ top: 10, right: 30, left: 0, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="date" stroke="#374151" />
                 <YAxis allowDecimals={false} stroke="#374151" />
-                <Tooltip 
-                  contentStyle={{ 
-                    borderRadius: '8px', 
-                    border: '1px solid #d1d5db', 
-                    backgroundColor: 'white',
-                    padding: '8px'
-                  }}
-                  labelFormatter={(label) => `Ngày ${label}`}
-                  formatter={(value) => [`${value} bài`, 'Đã đăng']}
-                />
+                {/* Đơn giản hóa Tooltip */}
+                <Tooltip />
                 <Legend />
                 <Line 
                   type="monotone" 
@@ -289,7 +269,7 @@ const Dashboard = ({ posts = [], facebookTokens = [], onRefresh, isLoading }) =>
                 />
               </LineChart>
             </ResponsiveContainer>
-          )}
+          }
         </div>
       </div>
       
