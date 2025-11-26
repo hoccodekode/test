@@ -64,10 +64,31 @@ const PostList = ({ posts, onPostUpdated, onPostDeleted }) => {
       setLoading(prev => ({ ...prev, [postId]: false }));
     }
   };
+  // Hàm Helper: Đảm bảo chuỗi thời gian từ Backend được coi là UTC
+  const parseScheduledTime = (dateString) => {
+    if (!dateString) return null;
+    let dateToParse = dateString;
+    // Thêm 'Z' để buộc JS hiểu đây là thời gian UTC
+    if (!dateString.includes('T')) {
+        dateToParse = dateString.replace(' ', 'T') + 'Z'; 
+    } else if (!dateString.endsWith('Z') && !dateString.includes('+')) {
+        dateToParse = dateString + 'Z';
+    }
+    return new Date(dateToParse);
+  };
 
+  // Hàm Helper để chuyển đổi và định dạng sang Giờ Việt Nam (UTC+7)
   const getStatusBadge = (post) => {
-    const now = new Date();
-    const scheduledTime = new Date(post.scheduled_time);
+    const now = parseScheduledTime(new Date().toISOString());
+    const scheduledTime = parseScheduledTime(post.scheduled_time);
+    // Nếu post.scheduled_time không hợp lệ
+    if (!scheduledTime) {
+      return (
+           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+              Lỗi lịch
+          </span>
+      );
+  }
 
     if (post.posted) {
       return (
@@ -123,7 +144,8 @@ const PostList = ({ posts, onPostUpdated, onPostDeleted }) => {
       timeZone: 'Asia/Ho_Chi_Minh', // Bắt buộc chuyển sang UTC+7
       hour12: false // Tùy chọn 24h
     });
-  };
+  };Expired
+
 
   return (
     <div className="space-y-6">
