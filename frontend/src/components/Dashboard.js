@@ -50,10 +50,35 @@ const Dashboard = ({ posts, facebookTokens, onRefresh }) => {
     }).length
   };
 
+// Hàm Helper để xử lý chuỗi thời gian không có múi giờ từ Backend
+const parseScheduledTime = (dateString) => {
+  if (!dateString) return null;
+  let dateToParse = dateString;
+  // Thêm 'Z' để buộc JS hiểu đây là thời gian UTC
+  if (!dateString.includes('T')) {
+      dateToParse = dateString.replace(' ', 'T') + 'Z'; 
+  } else if (!dateString.endsWith('Z') && !dateString.includes('+')) {
+      dateToParse = dateString + 'Z';
+  }
+  return new Date(dateToParse);
+};
+
+
   const upcomingPosts = posts
-    .filter(post => !post.posted && new Date(post.scheduled_time) > now)
-    .sort((a, b) => new Date(a.scheduled_time) - new Date(b.scheduled_time))
-    .slice(0, 5);
+   .filter(post => {
+      // 1. Chỉ lấy bài chưa đăng
+      if (post.posted) {
+          return false;
+      }
+
+      // 2. Chuyển đổi scheduled_time thành đối tượng Date được xem là UTC
+      const scheduledTimeUTC = parseScheduledTime(post.scheduled_time);
+      
+      // 3. So sánh với thời gian hiện tại (cũng là UTC)
+      return scheduledTimeUTC > now; // So sánh 2 đối tượng Date
+  })
+  .sort((a, b) => parseScheduledTime(a.scheduled_time) - parseScheduledTime(b.scheduled_time))
+  .slice(0, 5);
 
   const recentPosts = posts
     .filter(post => post.posted)
