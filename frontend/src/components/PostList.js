@@ -94,19 +94,34 @@ const PostList = ({ posts, onPostUpdated, onPostDeleted }) => {
   };
 
   const formatDateTime = (dateString) => {
-    // Nếu dateString là null hoặc undefined, trả về chuỗi rỗng
+    // 1. Kiểm tra nếu chuỗi rỗng
     if (!dateString) return 'N/A';
     
-    // Sử dụng múi giờ 'Asia/Ho_Chi_Minh' (UTC+7) để đảm bảo hiển thị đúng giờ Việt Nam cho mọi người dùng
-    return new Date(dateString).toLocaleString('vi-VN', {
+    // 2. Chuyển đổi chuỗi ngày tháng sang định dạng UTC chuẩn (ISO 8601)
+    // Backend thường trả về định dạng "YYYY-MM-DD HH:MM:SS" (tz-naive). 
+    // Ta thêm 'Z' (Zulu time, tức UTC) để buộc JS coi nó là UTC.
+    let dateToParse = dateString;
+    if (!dateString.includes('T')) {
+        // Thay thế khoảng trắng bằng 'T' (chuẩn ISO)
+        dateToParse = dateString.replace(' ', 'T') + 'Z'; 
+    } else if (!dateString.endsWith('Z') && !dateString.includes('+')) {
+        // Nếu đã có 'T' nhưng thiếu múi giờ, thêm 'Z'
+        dateToParse = dateString + 'Z';
+    }
+
+    // 3. Tạo đối tượng Date, lúc này nó đã là 16:55 UTC
+    const dateObj = new Date(dateToParse);
+    
+    // 4. Chuyển đổi và định dạng sang múi giờ Việt Nam (UTC+7)
+    // 16:55 UTC + 7 giờ = 23:55 ICT
+    return dateObj.toLocaleString('vi-VN', {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
       hour: '2-digit',
       minute: '2-digit',
-      // THÊM CẤU HÌNH MÚI GIỜ BẮT BUỘC:
-      timeZone: 'Asia/Ho_Chi_Minh'
-      // Tùy chọn thêm: hour12: false để hiển thị 24h
+      timeZone: 'Asia/Ho_Chi_Minh', // Bắt buộc chuyển sang UTC+7
+      hour12: false // Tùy chọn 24h
     });
   };
 
