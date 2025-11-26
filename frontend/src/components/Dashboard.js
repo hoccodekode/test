@@ -10,8 +10,35 @@ import {
   Plus
 } from 'lucide-react';
 
+// Dashboard.jsx (Bên trong component Dashboard)
 const Dashboard = ({ posts, facebookTokens, onRefresh }) => {
   const now = new Date();
+  
+  // Hàm Helper để chuyển đổi và định dạng sang Giờ Việt Nam (UTC+7)
+  const formatDateTimeToVietnam = (dateString) => {
+    if (!dateString) return 'N/A';
+    
+    let dateToParse = dateString;
+    // 1. Buộc JS hiểu chuỗi là UTC bằng cách thêm 'Z'
+    if (!dateString.includes('T')) {
+        dateToParse = dateString.replace(' ', 'T') + 'Z'; 
+    } else if (!dateString.endsWith('Z') && !dateString.includes('+')) {
+        dateToParse = dateString + 'Z';
+    }
+
+    const dateObj = new Date(dateToParse);
+    
+    // 2. Chuyển đổi và định dạng sang múi giờ Việt Nam
+    return dateObj.toLocaleString('vi-VN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'Asia/Ho_Chi_Minh', // Bắt buộc chuyển sang UTC+7
+      hour12: false
+    });
+  };
   
   const stats = {
     total: posts.length,
@@ -135,9 +162,9 @@ const Dashboard = ({ posts, facebookTokens, onRefresh }) => {
                         </div>
                       </div>
                     )}
-                    <div className="flex items-center mt-2 text-sm text-gray-500">
-                      <Clock className="h-4 w-4 mr-1" />
-                      {new Date(post.scheduled_time).toLocaleString('vi-VN')}
+                   <div className="flex items-center mt-2 text-sm text-gray-500">
+                     <Clock className="h-4 w-4 mr-1" />
+                     {formatDateTimeToVietnam(post.scheduled_time)}
                     </div>
                   </div>
                 ))}
@@ -195,7 +222,7 @@ const Dashboard = ({ posts, facebookTokens, onRefresh }) => {
                     )}
                     <div className="flex items-center mt-2 text-sm text-gray-500">
                       <CheckCircle className="h-4 w-4 mr-1 text-green-500" />
-                      Đã đăng lúc {new Date(post.posted_at).toLocaleString('vi-VN')}
+                      Đã đăng lúc: {formatDateTimeToVietnam(post.posted_at)}
                     </div>
                   </div>
                 ))}
